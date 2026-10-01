@@ -1,0 +1,283 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  username     String    @unique
+  passwordHash String
+  role         String
+  phone        String?
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Contact {
+  id                  String               @id @default(cuid())
+  phone               String               @unique
+  name                String
+  source              String
+  sourceDetail        String?
+  campaignId          String?
+  campaign            Campaign?            @relation(fields: [campaignId], references: [id])
+  referredById        String?
+  referredBy          Contact?             @relation("Referrals", fields: [referredById], references: [id])
+  referralsMade       Contact[]            @relation("Referrals")
+  salesStatus         String               @default("ליד חדש")
+  notRelevantReason   String?
+  requestedServiceId  String?
+  lastAiSummary       String?
+  noShowCount         Int                  @default(0)
+  referralCountManual Int?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  services            ContactService[]
+  appointments        Appointment[]
+  timeline            TimelineEvent[]
+  responses           QuestionnaireResponse[]
+  links               PublicLink[]
+  referralRows        Referral[]           @relation("Referrer")
+  referredRows        Referral[]           @relation("Referred")
+  credits             Credit[]
+  jobs                ScheduledJob[]
+
+  @@index([salesStatus])
+  @@index([createdAt])
+}
+
+model Service {
+  id           String           @id @default(cuid())
+  name         String
+  code         String           @unique
+  durationMin  Int
+  bufferMin    Int              @default(10)
+  price        Int
+  atRiskDays   Int              @default(28)
+  dormantDays  Int              @default(60)
+  active       Boolean          @default(true)
+  hasForYou    Boolean          @default(false)
+  contacts     ContactService[]
+  appointments Appointment[]
+  questionnaire Questionnaire?
+}
+
+model ContactService {
+  id          String    @id @default(cuid())
+  contactId   String
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  serviceId   String
+  service     Service   @relation(fields: [serviceId], references: [id])
+  opsStatus   String
+  leftReason  String?
+  preferences Json?
+  firstVisitAt DateTime?
+  lastVisitAt  DateTime?
+  @@unique([contactId, serviceId])
+}
+
+model Appointment {
+  id               String    @id @default(cuid())
+  contactId        String
+  contact          Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  serviceId        String
+  service          Service   @relation(fields: [serviceId], references: [id])
+  startsAt         DateTime
+  endsAt           DateTime
+  status           String    @default("נקבע")
+  bookedBy         String
+  googleEventId    String?
+  listPrice        Int
+  discountPct      Int       @default(0)
+  finalPrice       Int
+  paymentMethod    String?
+  amountPaid       Int?
+  completionsCount Int?
+  notes            String?
+  wasRescheduled   Boolean   @default(false)
+  motherDaughter   Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  redemptions      CreditRedemption[]
+  @@index([startsAt])
+  @@index([status])
+  @@index([googleEventId])
+}
+
+model TimelineEvent {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  type      String
+  actor     String
+  payload   Json
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  @@index([contactId, createdAt])
+}
+
+model Questionnaire {
+  id        String  @id @default(cuid())
+  serviceId String  @unique
+  service   Service @relation(fields: [serviceId], references: [id])
+  title     String
+  questions Json
+}
+
+model QuestionnaireResponse {
+  id          String   @id @default(cuid())
+  contactId   String
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  serviceId   String
+  answers     Json
+  submittedAt DateTime @default(now())
+  @@unique([contactId, serviceId])
+}
+
+model PublicLink {
+  id         String    @id @default(cuid())
+  contactId  String
+  contact    Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  kind       String
+  tokenHash  String    @unique
+  tokenHint  String
+  token      String?
+  expiresAt  DateTime?
+  usedAt     DateTime?
+  sentAt     DateTime?
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+}
+
+model Referral {
+  id         String    @id @default(cuid())
+  referrerId String
+  referrer   Contact   @relation("Referrer", fields: [referrerId], references: [id])
+  referredId String
+  referred   Contact   @relation("Referred", fields: [referredId], references: [id])
+  via        String
+  arrivedAt  DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model Credit {
+  id           String   @id @default(cuid())
+  contactId    String
+  contact      Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  referralId   String?
+  percent      Int
+  remainingPct Int
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  redemptions  CreditRedemption[]
+}
+
+model CreditRedemption {
+  id            String      @id @default(cuid())
+  creditId      String
+  credit        Credit      @relation(fields: [creditId], references: [id])
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  percentUsed   Int
+  createdAt     DateTime    @default(now())
+}
+
+model Campaign {
+  id          String          @id @default(cuid())
+  name        String
+  prefillText String          @default("")
+  active      Boolean         @default(true)
+  contacts    Contact[]
+  spend       CampaignSpend[]
+}
+
+model CampaignSpend {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  month      String
+  amount     Int
+  createdAt  DateTime @default(now())
+  @@unique([campaignId, month])
+}
+
+model Automation {
+  id              String         @id @default(cuid())
+  key             String         @unique
+  triggerEvent    String
+  delayMinutes    Int            @default(0)
+  messageTemplate String
+  active          Boolean        @default(true)
+  oncePerContact  Boolean        @default(false)
+  jobs            ScheduledJob[]
+}
+
+model ScheduledJob {
+  id              String     @id @default(cuid())
+  automationId    String
+  automation      Automation @relation(fields: [automationId], references: [id])
+  contactId       String
+  contact         Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  runAt           DateTime
+  status          String     @default("pending")
+  attempts        Int        @default(0)
+  idempotencyKey  String     @unique
+  lastError       String?
+  payload         Json
+  createdAt       DateTime   @default(now())
+  @@index([status, runAt])
+}
+
+model ApiToken {
+  id         String    @id @default(cuid())
+  name       String
+  tokenHash  String    @unique
+  active     Boolean   @default(true)
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model Secret {
+  key        String   @id
+  ciphertext String
+  updatedAt  DateTime @updatedAt
+}
+
+model SystemLog {
+  id        String   @id @default(cuid())
+  area      String
+  level     String
+  message   String
+  context   Json?
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+  @@index([area])
+}
+
+model CalendarReview {
+  id            String   @id @default(cuid())
+  googleEventId String   @unique
+  title         String
+  detectedPhone String?
+  status        String   @default("open")
+  createdAt     DateTime @default(now())
+}

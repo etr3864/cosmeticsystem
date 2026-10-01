@@ -1,0 +1,20 @@
+{
+  "name": "noa-system",
+  "private": true,
+  "packageManager": "pnpm@10.30.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "db:migrate": "pnpm --filter @noa/db migrate",
+    "db:seed": "pnpm --filter @noa/db seed",
+    "db:generate": "pnpm --filter @noa/db generate"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.6",
+    "typescript": "^5.9.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["argon2", "esbuild", "prisma", "@prisma/client", "@prisma/engines"]
+  }
+}

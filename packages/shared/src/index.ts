@@ -1,0 +1,17 @@
+export * from "./phone.js";
+export * from "./price.js";
+export * from "./statuses.js";
+export * from "./nt-tag.js";
+export * from "./availability.js";
+export * from "./permissions.js";
+export * from "./messages.js";
+export const TIMEZONE = "Asia/Jerusalem";
+export const PAGE_SIZE = 25;
+export const DISCOUNT_PERCENT = 10;
+export const DISCOUNT_HOURS = 24;
+export const CREDIT_PERCENT = 10;
+export const CREDIT_MONTHS = 3;
+export const CLINIC_ADDRESS = "שדרות ירושלים 64, באר שבע";
+export const CLINIC_UNIT = "קומה 3, דירה 12";
+export const CLINIC_PARKING = "חניה גדולה מתחת לבניין";
+export const AGENT_ID_DEFAULT = "32";

@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: noa
+      POSTGRES_PASSWORD: noa
+      POSTGRES_DB: noa
+    ports:
+      - "5432:5432"
+    volumes:
+      - noa_pg:/var/lib/postgresql/data
+
+volumes:
+  noa_pg:
