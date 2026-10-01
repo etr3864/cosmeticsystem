@@ -5,6 +5,7 @@ import { calculatePrice, canSeeTechnical, canWriteBusiness } from "@noa/shared";
 import { requireUser, currentUser } from "../../http/session.js";
 import { jsonError } from "../../http/errors.js";
 import { decrypt, encrypt, randomToken, sha256 } from "../../lib/crypto.js";
+import { googleAccountEmail, mirrorAppointment, resetGoogleSync, testGoogle } from "../calendar/google.js";
 
 export const settingsRoutes = new Hono();
 settingsRoutes.use("*", requireUser);
@@ -25,6 +26,7 @@ settingsRoutes.get("/", async (c) => {
     campaigns,
     technical,
     optiveHint: secret ? decrypt(secret.ciphertext).slice(-4) : null,
+    googleHint: await googleAccountEmail(),
     apiBase: `${(process.env.FRONTEND_URL ?? "http://localhost:3000").replace(/\/$/, "")}/backend`,
   });
 });
@@ -56,6 +58,7 @@ settingsRoutes.put("/services/:id", async (c) => {
   }
   if (body.durationMin != null) {
     const rows = await prisma.appointment.findMany({ where: { serviceId: service.id, status: { not: "בוטל" } } });
+    const moved: string[] = [];
     for (const row of rows) {
       const endsAt = new Date(row.startsAt.getTime() + body.durationMin * 60000);
       if (endsAt.getTime() === row.endsAt.getTime()) continue;
@@ -64,7 +67,9 @@ settingsRoutes.put("/services/:id", async (c) => {
         where: { idempotencyKey: `noshow:${row.id}`, status: "pending" },
         data: { runAt: new Date(endsAt.getTime() + 2 * 60 * 60 * 1000) },
       });
+      moved.push(row.id);
     }
+    for (const id of moved) await mirrorAppointment(id);
   }
   return c.json({ ok: true, price: service.price, durationMin: service.durationMin });
 });
@@ -115,6 +120,50 @@ settingsRoutes.post("/optive/test", async (c) => {
     body: "{}",
   });
   if (response.status === 401 || response.status === 403) return jsonError(c, 422, "invalid", "המפתח לא התקבל");
+  return c.json({ ok: true });
+});
+
+settingsRoutes.put("/google", async (c) => {
+  if (!canWriteBusiness(currentUser(c).role)) return jsonError(c, 401, "forbidden", "אין הרשאה");
+  const body = z.object({
+    calendarId: z.string().trim().min(3).max(200),
+    key: z.string().optional(),
+  }).parse(await c.req.json());
+  let email: string | null = null;
+  if (body.key?.trim()) {
+    let parsed: { client_email?: string; private_key?: string };
+    try {
+      parsed = JSON.parse(body.key) as { client_email?: string; private_key?: string };
+    } catch {
+      return jsonError(c, 422, "invalid", "הקובץ אינו JSON");
+    }
+    if (!parsed.client_email || !parsed.private_key) return jsonError(c, 422, "invalid", "חסרים client_email או private_key");
+    email = parsed.client_email;
+    await prisma.secret.upsert({
+      where: { key: "google_service_account" },
+      update: { ciphertext: encrypt(body.key) },
+      create: { key: "google_service_account", ciphertext: encrypt(body.key) },
+    });
+  }
+  await prisma.setting.upsert({
+    where: { key: "googleCalendarId" },
+    update: { value: body.calendarId },
+    create: { key: "googleCalendarId", value: body.calendarId },
+  });
+  await resetGoogleSync();
+  return c.json({ ok: true, googleHint: email ?? await googleAccountEmail(), calendarId: body.calendarId });
+});
+
+settingsRoutes.post("/google/test", async (c) => {
+  if (!canWriteBusiness(currentUser(c).role)) return jsonError(c, 401, "forbidden", "אין הרשאה");
+  try {
+    await testGoogle();
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "";
+    if (reason === "missing") return jsonError(c, 422, "missing", "חסרים מפתח או כתובת יומן");
+    if (reason === "shared") return jsonError(c, 422, "shared", "היומן לא משותף עם חשבון השירות");
+    return jsonError(c, 422, "invalid", "גוגל לא ענה");
+  }
   return c.json({ ok: true });
 });
 

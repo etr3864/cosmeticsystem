@@ -51,17 +51,17 @@ export default function HomePage() {
     <section className="h-full overflow-auto">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="display-title text-[40px] leading-10">ראשי</h1>
+          <h1 className="display-title text-[32px] leading-9 lg:text-[40px] lg:leading-10">ראשי</h1>
           <p className="text-muted">{labelRange(from, to)}</p>
         </div>
         <RangePicker preset={preset} from={from} to={to} onPreset={choose} onRange={(start, end) => { setPreset("custom"); setFrom(dayInput(start)); setTo(dayInput(end)); }} />
       </div>
       {loading || !data ? <DashSkeleton /> : (
         <>
-          <article className="dash-card hero glass mb-5 grid gap-6 rounded-xl p-6 md:grid-cols-[1.3fr_1fr]">
+          <article className="dash-card hero glass mb-5 grid gap-6 rounded-xl p-4 sm:p-6 md:grid-cols-[1.3fr_1fr]">
             <div>
               <p className="text-[12px] font-bold tracking-[0.18em] text-goldInk">הכנסה</p>
-              <p className="count-up mt-2 font-sans text-[64px] font-bold leading-none"><Count value={`₪${data.income}`} /></p>
+              <p className="count-up mt-2 font-sans text-[44px] font-bold leading-none sm:text-[64px]"><Count value={`₪${data.income}`} /></p>
               <p className="mt-3 text-muted">{data.operations.arrived} הגיעו · {data.operations.noShow} לא הגיעו</p>
             </div>
             <div>
@@ -173,7 +173,7 @@ function RangePicker({ preset, from, to, onPreset, onRange }: { preset: Preset; 
 
   return (
     <div ref={box} className="relative">
-      <div className="inline-flex items-center gap-0.5 rounded-[14px] border border-line bg-[#F5EFE7] p-1">
+      <div className="flex max-w-full flex-wrap items-center gap-0.5 rounded-[14px] border border-line bg-[#F5EFE7] p-1">
         {presets.map(([id, label]) => (
           <button key={id} type="button" onClick={() => { onPreset(id); if (open) requestClose(); }} className={`h-9 rounded-[10px] px-3.5 text-sm ${preset === id ? "bg-brand font-bold text-onBrand" : "text-muted"}`}>{label}</button>
         ))}
@@ -183,8 +183,8 @@ function RangePicker({ preset, from, to, onPreset, onRange }: { preset: Preset; 
         </button>
       </div>
       {open ? (
-        <div onAnimationEnd={onAnimationEnd} className={`absolute left-0 top-[calc(100%+8px)] z-30 flex max-w-[calc(100vw-4rem)] overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_16px_40px_-8px_rgba(62,31,8,0.16)] ${leaving ? "pop-out" : "pop-in"}`}>
-          <div className="flex w-40 shrink-0 flex-col gap-0.5 border-e border-line bg-[#FBF8F4] p-4">
+        <div onAnimationEnd={onAnimationEnd} className={`range-pop absolute left-0 top-[calc(100%+8px)] z-30 flex overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_16px_40px_-8px_rgba(62,31,8,0.16)] ${leaving ? "pop-out" : "pop-in"}`}>
+          <div className="range-side flex w-40 shrink-0 flex-col gap-0.5 border-e border-line bg-[#FBF8F4] p-4">
             {presets.map(([id, label]) => (
               <button key={id} type="button" onClick={() => { onPreset(id); requestClose(); }} className={`h-10 rounded-[10px] px-3 text-right text-sm ${preset === id ? "bg-[#F3EAE0] font-bold text-brand" : "text-muted"}`}>{label}</button>
             ))}
@@ -199,7 +199,7 @@ function RangePicker({ preset, from, to, onPreset, onRange }: { preset: Preset; 
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="m15 18-6-6 6-6" /></svg>
               </button>
             </div>
-            <div className="flex gap-8" onMouseLeave={() => setHover(null)}>
+            <div className="range-months" onMouseLeave={() => setHover(null)}>
               <MonthGrid month={right} from={from} to={to} pending={start} hover={hover} onPick={pickDay} onHover={setHover} />
               <MonthGrid month={left} from={from} to={to} pending={start} hover={hover} onPick={pickDay} onHover={setHover} />
             </div>

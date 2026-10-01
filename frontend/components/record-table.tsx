@@ -76,7 +76,8 @@ export function RecordTable({ kind }: { kind: "lead" | "client" }) {
     const rect = event.currentTarget.getBoundingClientRect();
     const width = Math.min(280, window.innerWidth - 32);
     const left = Math.max(16, Math.min(rect.right - width, window.innerWidth - width - 16));
-    const top = Math.min(rect.bottom + 8, Math.max(16, window.innerHeight - 460));
+    const chrome = window.innerWidth < 1024 ? 88 : 16;
+    const top = Math.min(rect.bottom + 8, Math.max(16, window.innerHeight - 460 - chrome));
     setJourney({ id, top, left });
   }
 
@@ -159,9 +160,9 @@ export function RecordTable({ kind }: { kind: "lead" | "client" }) {
 
   return (
     <section className="flex h-full flex-col">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="display-title text-[40px] leading-10">{kind === "lead" ? "לידים" : "לקוחות"}</h1>
+          <h1 className="display-title text-[32px] leading-9 lg:text-[40px] lg:leading-10">{kind === "lead" ? "לידים" : "לקוחות"}</h1>
           <p className="text-sm text-muted">{total} רשומות</p>
         </div>
         <div className="flex gap-2">
@@ -175,11 +176,11 @@ export function RecordTable({ kind }: { kind: "lead" | "client" }) {
         </div>
       </div>
       <div className="filters mb-3 flex flex-wrap gap-2">
-        <select value={kind === "lead" ? status : opsStatus} onChange={(event) => kind === "lead" ? setStatus(event.target.value) : setOpsStatus(event.target.value)} className="rounded-md border border-lineStrong bg-surface px-3 py-2">
+        <select value={kind === "lead" ? status : opsStatus} onChange={(event) => kind === "lead" ? setStatus(event.target.value) : setOpsStatus(event.target.value)} className="min-w-0 flex-1 rounded-md border border-lineStrong bg-surface px-3 py-2 sm:flex-none">
           <option value="">כל הסטטוסים</option>
           {(kind === "lead" ? leadStatuses : ops).map((item) => <option key={item}>{item}</option>)}
         </select>
-        <select value={source} onChange={(event) => setSource(event.target.value)} className="rounded-md border border-lineStrong bg-surface px-3 py-2">
+        <select value={source} onChange={(event) => setSource(event.target.value)} className="min-w-0 flex-1 rounded-md border border-lineStrong bg-surface px-3 py-2 sm:flex-none">
           <option value="">כל המקורות</option>
           {sources.map((item) => <option key={item}>{item}</option>)}
         </select>
@@ -211,7 +212,25 @@ export function RecordTable({ kind }: { kind: "lead" | "client" }) {
         document.body,
       ) : null}
       <div className="ledger min-h-0 flex-1 overflow-auto rounded-xl border">
-        <table className="data-table w-full min-w-[720px] text-right text-[15px]">
+        <ul className="space-y-2 p-2 md:hidden">
+          {items.map((row) => (
+            <li key={row.id} className={`rounded-xl border border-line bg-white p-3 ${selected.includes(row.id) ? "picked" : ""}`}>
+              <div className="flex items-start gap-3">
+                <Pick on={selected.includes(row.id)} label={`בחירת ${row.name}`} onToggle={() => toggleRow(row.id)} />
+                <button type="button" onClick={() => setOpenId(row.id)} className="min-w-0 flex-1 text-right">
+                  <span className="block font-bold">{row.name}</span>
+                  <span className="mt-0.5 block text-sm text-muted">{new Date(kind === "client" ? row.services[0]?.firstVisitAt ?? row.createdAt : row.createdAt).toLocaleDateString("he-IL")} · {kind === "lead" ? row.source : `${row.visits} הגעות`}</span>
+                </button>
+                <a href={`tel:${row.phone}`} className="shrink-0 rounded-full bg-sunken px-3 py-2 text-sm font-bold">חיוג</a>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <button type="button" onClick={(event) => openJourney(event, row.id)} className="rounded-full border border-line bg-white px-3 py-1 text-sm">{kind === "client" ? row.services[0]?.status || "ללא מסלול" : row.salesStatus}</button>
+                <span className="text-sm text-muted" dir="ltr">{row.phone}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <table className="data-table hidden w-full min-w-[720px] text-right text-[15px] md:table">
           <thead className="sticky top-0 bg-sunken text-[13px] text-muted">
             <tr>
               <th className="p-3"><Pick on={allPage} mixed={!allPage && somePage} label="בחירת העמוד" onToggle={togglePage} /></th>

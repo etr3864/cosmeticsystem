@@ -36,6 +36,7 @@ export default function CalendarPage() {
   const [draft, setDraft] = useState<Date | null>(null);
   const [cardId, setCardId] = useState<string | null>(null);
   const [view, setView] = useState("dayGridMonth");
+  const [narrow, setNarrow] = useState(false);
   const [onToday, setOnToday] = useState(true);
   const [title, setTitle] = useState("");
   const range = useRef("");
@@ -56,9 +57,16 @@ export default function CalendarPage() {
     const fit = () => calendarRef.current?.getApi().updateSize();
     const frame = requestAnimationFrame(fit);
     const timer = window.setTimeout(fit, 760);
+    const media = window.matchMedia("(max-width: 1023px)");
+    const apply = () => { setNarrow(media.matches); fit(); };
+    apply();
+    media.addEventListener("change", apply);
+    window.addEventListener("resize", fit);
     return () => {
       cancelAnimationFrame(frame);
       window.clearTimeout(timer);
+      media.removeEventListener("change", apply);
+      window.removeEventListener("resize", fit);
     };
   }, []);
 
@@ -137,28 +145,28 @@ export default function CalendarPage() {
 
   return (
     <section className="relative h-full min-h-0">
-      <div className="glass flex h-full min-h-0 flex-col overflow-hidden rounded-xl p-4">
-        <div className="cal-head mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+      <div className="glass flex h-full min-h-0 flex-col overflow-hidden rounded-xl p-2 sm:p-4">
+        <div className="cal-head mb-3 flex shrink-0 flex-col gap-3 lg:mb-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <button onClick={() => calendarRef.current?.getApi().prev()} className="rounded-full bg-white/80 px-3 py-2">הקודם</button>
             <button onClick={() => calendarRef.current?.getApi().next()} className="rounded-full bg-white/80 px-3 py-2">הבא</button>
             <button onClick={() => calendarRef.current?.getApi().today()} className={`rounded-full px-3 py-2 font-bold ${onToday ? "bg-brand text-onBrand" : "bg-white/80"}`}>היום</button>
-            <h2 className="px-2 text-2xl">{title}</h2>
+            <h2 className="min-w-0 truncate px-1 text-xl lg:text-2xl">{title}</h2>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <div className="seg">
               {[["dayGridMonth", "חודש"], ["timeGridWeek", "שבוע"], ["timeGridDay", "יום"], ["listMonth", "רשימה"]].map(([id, label]) => (
                 <button key={id} className={view === id ? "on" : ""} onClick={() => calendarRef.current?.getApi().changeView(id)}>{label}</button>
               ))}
             </div>
-            <button onClick={() => openAt(nextSlot())} className="rounded-full bg-brand px-4 py-2 font-bold text-onBrand">תור חדש</button>
+            <button onClick={() => openAt(nextSlot())} className="shrink-0 rounded-full bg-brand px-4 py-2 font-bold text-onBrand">תור חדש</button>
           </div>
         </div>
         {reviews.length > 0 ? (
           <div className="mb-3 shrink-0 space-y-2 rounded-lg bg-[#FBEFD5] p-3 text-[#875208]">
             {reviews.map((review) => (
-              <div key={review.id} className="flex items-center justify-between gap-3">
-                <span>{review.title}{review.detectedPhone ? ` · ${review.detectedPhone}` : ""}</span>
+              <div key={review.id} className="flex flex-wrap items-center justify-between gap-3">
+                <span className="min-w-0 break-words">{review.title}{review.detectedPhone ? ` · ${review.detectedPhone}` : ""}</span>
                 <button onClick={() => dismiss(review.id)} className="rounded-md bg-white px-3 py-1 text-ink">סגירה</button>
               </div>
             ))}
@@ -172,10 +180,11 @@ export default function CalendarPage() {
           locale={heLocale}
           direction="rtl"
           height="100%"
-          editable
-          eventDurationEditable={view === "timeGridWeek" || view === "timeGridDay"}
-          eventResizableFromStart={view === "timeGridWeek" || view === "timeGridDay"}
-          dayMaxEvents={3}
+          editable={!narrow}
+          eventDurationEditable={!narrow && (view === "timeGridWeek" || view === "timeGridDay")}
+          eventResizableFromStart={!narrow && (view === "timeGridWeek" || view === "timeGridDay")}
+          dayMaxEvents={narrow ? 2 : 3}
+          moreLinkText={(count) => `+${count}`}
           nowIndicator
           allDaySlot={false}
           slotMinTime="08:00:00"

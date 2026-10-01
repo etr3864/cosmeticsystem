@@ -65,11 +65,11 @@ export default function ContactPage({ params }: { params: Promise<{ id: string }
         {credit > 0 ? ` · זיכוי ${credit}%` : ""}
         {contact.noShowCount > 0 ? ` · לא הגיעה ${contact.noShowCount}` : ""}
       </p>
-      <div className="mt-4 flex gap-2">
+      <div className="mt-4 flex flex-wrap gap-2">
         <a href={contact.conversationUrl} target="_blank" className="rounded-md bg-brand px-4 py-3 text-onBrand">לשיחה עם הסוכנת</a>
         <button onClick={sendPartner} className="rounded-md bg-[#EDE3D6] px-4 py-3">שליחת קישור שותפים</button>
       </div>
-      <div className="mt-6 flex gap-2">
+      <div className="mt-6 flex gap-2 overflow-x-auto">
         {tabs.map((item) => (
           <button key={item} onClick={() => setTab(item)} className={`rounded-full px-4 py-2 ${tab === item ? "bg-brand text-onBrand" : "bg-sunken"}`}>{item}</button>
         ))}
@@ -91,7 +91,7 @@ export default function ContactPage({ params }: { params: Promise<{ id: string }
               <p className="font-bold">{item.service.name} · {item.status} · {item.finalPrice}₪</p>
               <p className="text-sm text-muted">{new Date(item.startsAt).toLocaleString("he-IL")}{item.motherDaughter ? " · אם ובת" : ""}</p>
               {item.notes ? <p className="mt-1 text-sm">{item.notes}</p> : null}
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <button onClick={() => attend(item.id, "הגיעה")} className="rounded-md bg-[#3F6B3A] px-3 py-2 text-white">הגיעה</button>
                 <button onClick={() => attend(item.id, "לא הגיעה")} className="rounded-md bg-[#F7E0E5] px-3 py-2 text-[#9B2F45]">לא הגיעה</button>
               </div>

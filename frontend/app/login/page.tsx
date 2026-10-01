@@ -20,9 +20,9 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center px-6">
-      <form onSubmit={onSubmit} className="page-in w-full max-w-sm rounded-xl bg-surface p-8 shadow-sheet">
-        <img src="/logo.jpg" alt="נועה טורג'מן" className="mx-auto mb-6 h-28 w-28 rounded-full" />
+    <main className="grid min-h-dvh place-items-center px-4 py-8">
+      <form onSubmit={onSubmit} className="page-in w-full max-w-sm rounded-xl bg-surface p-6 shadow-sheet sm:p-8">
+        <img src="/logo.jpg" alt="נועה טורג'מן" className="mx-auto mb-6 h-24 w-24 rounded-full sm:h-28 sm:w-28" />
         <h1 className="mb-6 text-center text-[32px] leading-10">כניסה</h1>
         <label className="mb-3 block text-[13px] font-bold text-muted">שם משתמש
           <input name="username" className="mt-1 w-full rounded-md border border-lineStrong bg-sunken px-3 py-3" />

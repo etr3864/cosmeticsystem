@@ -146,7 +146,7 @@ export function BookingDialog({ startsAt, onClose, onBooked, existing, lockConta
     <>
       <button className={`drawer-bg book-layer${leaving ? " out" : ""}`} aria-label="סגירה" onClick={() => requestClose()} />
       <div className="book-layer pointer-events-none fixed inset-0 flex items-center justify-center p-4">
-      <form onSubmit={submit} onAnimationEnd={onAnimationEnd} className={`glass pointer-events-auto grid max-h-full w-[min(980px,100%)] grid-cols-1 gap-4 overflow-hidden rounded-xl p-5 md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)] ${leaving ? "sheet-out" : "sheet-in"}`}>
+      <form onSubmit={submit} onAnimationEnd={onAnimationEnd} className={`glass pointer-events-auto grid max-h-[min(100%,calc(100dvh-2rem))] w-[min(980px,100%)] grid-cols-1 gap-4 overflow-y-auto overscroll-contain rounded-xl p-4 sm:p-5 md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)] ${leaving ? "sheet-out" : "sheet-in"}`}>
         <div className="md:col-span-2">
           <p className="text-[12px] font-bold tracking-[0.16em] text-goldInk">{existing ? "עריכת תור" : "תור חדש"}</p>
           <h2 className="mt-1 text-2xl">{when.toLocaleString("he-IL", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</h2>
@@ -223,7 +223,7 @@ function WhenPicker({ when, month, setMonth, onDay, onTime }: { when: Date; mont
   const today = new Date();
 
   return (
-    <div className="flex min-w-0 items-start gap-3 overflow-hidden rounded-xl bg-white/75 p-3">
+    <div className="flex min-w-0 flex-col items-stretch gap-3 overflow-hidden rounded-xl bg-white/75 p-3 sm:flex-row sm:items-start">
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <button type="button" onClick={() => setMonth(new Date(year, monthIndex - 1, 1))} className="shrink-0 rounded-full bg-sunken px-3 py-1">הקודם</button>
@@ -247,15 +247,15 @@ function WhenPicker({ when, month, setMonth, onDay, onTime }: { when: Date; mont
           })}
         </div>
       </div>
-      <div className="w-[9.5rem] shrink-0">
+      <div className="w-full shrink-0 sm:w-[9.5rem]">
         <p className="text-sm text-muted">שעה</p>
         <ExactTime when={when} onTime={onTime} />
-        <div className="mt-2 grid grid-cols-2 gap-1">
+        <div className="mt-2 grid grid-cols-4 gap-1 sm:grid-cols-2">
           {times.map((slot) => {
             const selected = when.getHours() === slot.hour && when.getMinutes() === slot.minute;
             const label = `${String(slot.hour).padStart(2, "0")}:${String(slot.minute).padStart(2, "0")}`;
             return (
-              <button key={label} type="button" onClick={() => onTime(slot.hour, slot.minute)} className={`rounded-full py-1 text-[11px] ${selected ? "bg-brand text-onBrand" : "bg-sunken hover:bg-[#E4D3C0]"}`}>
+              <button key={label} type="button" onClick={() => onTime(slot.hour, slot.minute)} className={`rounded-full py-2 text-sm sm:py-1 sm:text-[11px] ${selected ? "bg-brand text-onBrand" : "bg-sunken hover:bg-[#E4D3C0]"}`}>
                 {label}
               </button>
             );

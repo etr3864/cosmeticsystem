@@ -34,7 +34,7 @@ export function guestClock(iso: string) {
 
 export function GuestScreen({ children }: { children: ReactNode }) {
   return (
-    <main className="guest-page mx-auto flex min-h-screen w-full max-w-lg flex-col px-5 py-12">
+    <main className="guest-page mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-10 sm:px-5 sm:py-12">
       <p className="guest-mark">בס״ד</p>
       {children}
     </main>
@@ -46,7 +46,7 @@ export function GuestHero({ kicker, title, children }: { kicker: string; title: 
     <header className="guest-rise text-center">
       <img src="/logo.jpg" alt="" className="mx-auto h-[72px] w-[72px] rounded-full shadow-pop ring-4 ring-white" />
       <p className="mt-5 text-sm font-bold text-goldInk">{kicker}</p>
-      <h1 className="mt-1 text-[40px] leading-[1.15] text-ink">{title}</h1>
+      <h1 className="mt-1 break-words text-[32px] leading-[1.15] text-ink sm:text-[40px]">{title}</h1>
       <div className="gold-rule mx-auto mt-4 w-24" />
       {children}
     </header>

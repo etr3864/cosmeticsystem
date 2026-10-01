@@ -202,7 +202,7 @@ export function ContactDrawer({ id, kind, onClose, onChanged }: { id: string; ki
       <aside onAnimationEnd={onAnimationEnd} className={`drawer glass ${leaving ? "sheet-out" : "sheet-in"}`}>
         <div className={isClient ? "rounded-xl bg-brand px-4 py-4 text-onBrand" : "rounded-xl border border-[#E8DDD0] bg-[#FBF6EE] px-4 py-4 text-ink"}>
           <p className={`text-[12px] font-bold tracking-[0.16em] ${isClient ? "" : "text-goldInk"}`}>{isClient ? "לקוחה" : "ליד"}</p>
-          <h2 className="mt-1 text-[32px] leading-10">{person.name}</h2>
+          <h2 className="mt-1 break-words text-[28px] leading-9 sm:text-[32px] sm:leading-10">{person.name}</h2>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <a href={`tel:${person.phoneDisplay}`} className="rounded-full bg-white px-4 py-2 font-bold text-ink">{person.phoneDisplay}</a>

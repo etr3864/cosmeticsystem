@@ -4,6 +4,7 @@ import { prisma } from "@noa/db";
 import { CLINIC_ADDRESS, CLINIC_PARKING, CLINIC_UNIT, DISCOUNT_PERCENT, priceAfterPercent } from "@noa/shared";
 import { findLink } from "../links/service.js";
 import { createAppointment } from "../appointments/service.js";
+import { mirrorAppointment } from "../calendar/google.js";
 import { openSlots, slotIsOpen } from "../appointments/slots.js";
 import { jsonError } from "../../http/errors.js";
 import { normalizePhone } from "@noa/shared";
@@ -76,6 +77,7 @@ publicRoutes.post("/:token/book-friend", async (c) => {
     bookedBy: "המלצה",
     discountPct: DISCOUNT_PERCENT,
   });
+  await mirrorAppointment(appointment.id);
   return c.json({ ok: true, startsAt: appointment.startsAt });
 });
 
@@ -97,6 +99,7 @@ publicRoutes.post("/:token/book", async (c) => {
     bookedBy: "קישור מוזל",
     discountPct: DISCOUNT_PERCENT,
   });
+  await mirrorAppointment(appointment.id);
   await prisma.publicLink.update({ where: { id: link.id }, data: { usedAt: new Date() } });
   const clinic = await prisma.setting.findUnique({ where: { key: "clinic" } });
   return c.json({ ok: true, startsAt: appointment.startsAt, clinic: clinic?.value });

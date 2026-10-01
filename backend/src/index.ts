@@ -3,6 +3,7 @@ import { prisma } from "@noa/db";
 import { createApp } from "./app.js";
 import { assertEncryptionKey } from "./lib/crypto.js";
 import { runDueJobs } from "./modules/automations/run.js";
+import { pullGoogle } from "./modules/calendar/google.js";
 import { recomputeAllServices } from "./modules/pipelines/service.js";
 import { dayKey } from "./lib/time.js";
 import { logEvent } from "./lib/log.js";
@@ -23,6 +24,9 @@ let sweptDay = "";
 setInterval(() => {
   void runDueJobs().catch((error) => {
     console.error("jobs skipped", error instanceof Error ? error.message : error);
+  });
+  void pullGoogle().catch((error) => {
+    console.error("google skipped", error instanceof Error ? error.message : error);
   });
   const today = dayKey(new Date());
   if (sweptDay === today) return;

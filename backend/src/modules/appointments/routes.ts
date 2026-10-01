@@ -5,6 +5,7 @@ import { calculatePrice, formatPhoneDisplay, parseNtTag } from "@noa/shared";
 import { currentUser, requireUser } from "../../http/session.js";
 import { jsonError } from "../../http/errors.js";
 import { cancelAppointment, createAppointment, markAttendance, placeAppointment } from "./service.js";
+import { mirrorAppointment } from "../calendar/google.js";
 import { addTimeline } from "../pipelines/service.js";
 import { clock, hebrewDate } from "../../lib/time.js";
 
@@ -71,6 +72,7 @@ appointmentRoutes.post("/", async (c) => {
     notes: body.notes,
     actor: currentUser(c).username,
   });
+  await mirrorAppointment(appointment.id);
   return c.json({ ...appointment, becameClient: before?.salesStatus !== "לקוחה פעילה" }, 201);
 });
 
@@ -122,6 +124,7 @@ appointmentRoutes.patch("/:id", async (c) => {
     });
   }
   if (changes.length) await addTimeline(current.contactId, "field_change", currentUser(c).username, { changes });
+  await mirrorAppointment(current.id);
   return c.json({ ok: true, startsAt, endsAt });
 });
 
@@ -142,6 +145,7 @@ appointmentRoutes.post("/:id/move", async (c) => {
       changes: [{ field: "שעת התור", from: slotLabel(current.startsAt), to: slotLabel(startsAt) }],
     });
   }
+  await mirrorAppointment(current.id);
   return c.json({ ok: true, startsAt, endsAt });
 });
 
@@ -168,6 +172,7 @@ appointmentRoutes.post("/:id/attendance", async (c) => {
 appointmentRoutes.post("/:id/cancel", async (c) => {
   const appointment = await cancelAppointment(c.req.param("id"), currentUser(c).username);
   if (!appointment) return jsonError(c, 404, "not_found", "התור לא נמצא");
+  await mirrorAppointment(appointment.id);
   return c.json({ ok: true });
 });
 

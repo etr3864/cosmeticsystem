@@ -21,19 +21,20 @@ const tabs = [
   { id: "prices", label: "מחירון", hint: "ברירת מחדל לכל שירות", icon: Coins },
   { id: "budget", label: "תקציב", hint: "הוצאה שיווקית לפי חודש", icon: Wallet },
   { id: "messages", label: "הודעות", hint: "הטקסטים שנשלחים", icon: MessageSquare },
-  { id: "calendar", label: "יומן גוגל", hint: "כותרות לבדיקה", icon: CalendarDays },
+  { id: "calendar", label: "יומן גוגל", hint: "היומן של נועה", icon: CalendarDays },
   { id: "guide", label: "מדריכים", hint: "טוקן וה־API לשירה", icon: BookOpen },
 ] as const;
 
 type Tab = (typeof tabs)[number]["id"];
 
 type Settings = {
-  settings: { markedWeek?: Record<string, { start: string; end: string } | null>; clinic?: { address: string; unit: string; parking: string } };
+  settings: { markedWeek?: Record<string, { start: string; end: string } | null>; clinic?: { address: string; unit: string; parking: string }; googleCalendarId?: string };
   automations: { key: string; messageTemplate: string; active: boolean }[];
   services: { id: string; name: string; price: number; durationMin: number }[];
   campaigns: { id: string; name: string; spend: { month: string; amount: number }[] }[];
   technical?: boolean;
   optiveHint?: string | null;
+  googleHint?: string | null;
   apiBase?: string;
 };
 
@@ -64,26 +65,26 @@ export default function SettingsPage() {
   return (
     <section className="flex h-full min-h-0 flex-col">
       <header className="mb-4 shrink-0">
-        <h1 className="display-title text-[40px] leading-10">הגדרות</h1>
+        <h1 className="display-title text-[32px] leading-9 lg:text-[40px] lg:leading-10">הגדרות</h1>
       </header>
-      <div className="glass flex min-h-0 flex-1 overflow-hidden rounded-xl">
-        <nav className="flex w-56 shrink-0 flex-col gap-1 border-e border-line p-3">
+      <div className="glass flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl lg:flex-row">
+        <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-line p-2 lg:w-56 lg:flex-col lg:overflow-visible lg:border-b-0 lg:border-e lg:p-3">
           {tabs.map((item) => {
             const Icon = item.icon;
             const on = tab === item.id;
             return (
-              <button key={item.id} type="button" onClick={() => setTab(item.id)} className={`settings-still flex items-center gap-3 rounded-xl px-3 py-3 text-right ${on ? "bg-brand text-onBrand shadow-card" : "text-ink hover:bg-white/80"}`}>
+              <button key={item.id} type="button" onClick={() => setTab(item.id)} className={`settings-still flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-right lg:w-full lg:gap-3 lg:py-3 ${on ? "bg-brand text-onBrand shadow-card" : "text-ink hover:bg-white/80"}`}>
                 <Icon size={18} strokeWidth={1.75} />
                 <span className="min-w-0">
-                  <span className="block font-bold">{item.label}</span>
-                  <span className={`block text-xs ${on ? "text-onBrand/80" : "text-faint"}`}>{item.hint}</span>
+                  <span className="block whitespace-nowrap font-bold">{item.label}</span>
+                  <span className={`hidden text-xs lg:block ${on ? "text-onBrand/80" : "text-faint"}`}>{item.hint}</span>
                 </span>
               </button>
             );
           })}
         </nav>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div ref={pane} className="min-h-0 flex-1 overflow-y-auto p-6">
+          <div ref={pane} className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6">
             {!data ? <p className="text-muted">טוען</p> : (
               <div key={tab} className="settings-pane">
                 {tab === "hours" ? (
@@ -94,7 +95,7 @@ export default function SettingsPage() {
                       {days.map((label, index) => {
                         const value = week[String(index)];
                         return (
-                          <div key={label} className="settings-row flex items-center gap-3 rounded-xl border border-line bg-white/75 px-3 py-2.5" style={{ animationDelay: `${index * 40}ms` }}>
+                          <div key={label} className="settings-row flex flex-wrap items-center gap-3 rounded-xl border border-line bg-white/75 px-3 py-2.5" style={{ animationDelay: `${index * 40}ms` }}>
                             <button type="button" aria-label={value ? `${label} פתוח` : `${label} סגור`} onClick={() => setWeek({ ...week, [index]: value ? null : { start: "09:00", end: "19:00" } })} className={`pick ${value ? "on" : ""}`}>{value ? "✓" : ""}</button>
                             <span className="w-16 font-bold">{label}</span>
                             {value ? (
@@ -234,17 +235,15 @@ export default function SettingsPage() {
                   </>
                 ) : null}
                 {tab === "calendar" ? (
-                  <>
-                    <h2 className="text-2xl">יומן גוגל</h2>
-                    <p className="mt-1 text-muted">החיבור החי מחכה למפתח חשבון שירות. עד אז, כותרת עם [NT:טלפון] נכנסת לתור הבדיקה ביומן.</p>
-                    <label className="mt-4 block text-sm text-muted">כותרת האירוע
-                      <textarea id="nt-title" placeholder="לק ג'ל [NT:052-123-4567]" className="mt-1 w-full rounded-md border border-lineStrong bg-white p-3 text-ink" rows={3} />
-                    </label>
-                    <button type="button" onClick={() => {
-                      const field = document.getElementById("nt-title") as HTMLTextAreaElement;
-                      api("/appointments/reviews/ingest", { method: "POST", body: JSON.stringify({ title: field.value }) }).then(() => { field.value = ""; pushToast("נשמר"); }).catch((error: Error) => pushToast(error.message));
-                    }} className="mt-3 rounded-full bg-brand px-5 py-2 text-onBrand">שליחה לבדיקה</button>
-                  </>
+                  <GoogleLink
+                    hint={data.googleHint ?? null}
+                    calendarId={typeof data.settings.googleCalendarId === "string" ? data.settings.googleCalendarId : ""}
+                    onSaved={(googleHint, calendarId) => setData((current) => current && {
+                      ...current,
+                      googleHint,
+                      settings: { ...current.settings, googleCalendarId: calendarId },
+                    })}
+                  />
                 ) : null}
                 {tab === "guide" ? <SettingsApiGuide apiBase={data.apiBase ?? "http://localhost:3000/backend"} /> : null}
               </div>
@@ -447,6 +446,71 @@ function SendSwitch({ on, label, onToggle }: { on: boolean; label: string; onTog
   );
 }
 
+function GoogleLink({ hint, calendarId, onSaved }: { hint: string | null; calendarId: string; onSaved: (hint: string | null, calendarId: string) => void }) {
+  const [email, setEmail] = useState(calendarId);
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        const next = email.trim();
+        if (!next) return;
+        setBusy(true);
+        api<{ googleHint: string | null }>("/settings/google", {
+          method: "PUT",
+          body: JSON.stringify({ calendarId: next, ...(key.trim() ? { key } : {}) }),
+        })
+          .then((saved) => {
+            onSaved(saved.googleHint ?? hint, next);
+            setKey("");
+            pushToast("נשמר");
+          })
+          .catch((error: Error) => pushToast(error.message))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <h2 className="text-2xl">יומן גוגל</h2>
+      <p className="mt-1 text-muted">תור שנקבע כאן נכתב ליומן של נועה. תור שהיא מוסיפה בגוגל נכנס לכאן כשיש בכותרת [NT:טלפון], למשל לק ג׳ל [NT:0521234567]. אירוע בלי טלפון נשאר בגוגל.</p>
+      <p className="mt-3 text-sm">{hint ? `מחובר עם ${hint}` : "עוד אין מפתח."}</p>
+      <label className="mt-4 block text-sm text-muted">כתובת היומן
+        <input
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="המייל של היומן"
+          className="mt-1 w-full rounded-md border border-lineStrong bg-white px-3 py-2 text-ink"
+        />
+      </label>
+      <p className="mt-2 text-sm text-muted">משתפים את היומן עם כתובת חשבון השירות, עם הרשאה לערוך אירועים.</p>
+      <label className="mt-3 block text-sm text-muted">מפתח JSON
+        <textarea
+          value={key}
+          onChange={(event) => setKey(event.target.value)}
+          placeholder="מדביקים את הקובץ פעם אחת"
+          className="mt-1 w-full rounded-md border border-lineStrong bg-white p-3 text-ink"
+          rows={4}
+        />
+      </label>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="submit" disabled={busy || !email.trim()} className="rounded-full bg-brand px-5 py-2 text-onBrand">שמירה</button>
+        <button
+          type="button"
+          disabled={busy || !hint}
+          onClick={() => {
+            setBusy(true);
+            api("/settings/google/test", { method: "POST" })
+              .then(() => pushToast("היומן נפתח"))
+              .catch((error: Error) => pushToast(error.message))
+              .finally(() => setBusy(false));
+          }}
+          className="rounded-full bg-white px-5 py-2"
+        >בדיקת חיבור</button>
+      </div>
+    </form>
+  );
+}
+
 function OptiveKey({ hint, onSaved }: { hint: string | null; onSaved: (hint: string) => void }) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
@@ -482,7 +546,7 @@ function OptiveKey({ hint, onSaved }: { hint: string | null; onSaved: (hint: str
           className="mt-1 w-full rounded-md border border-lineStrong bg-white px-3 py-2 text-ink"
         />
       </label>
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         <button type="submit" disabled={busy || !value.trim()} className="rounded-full bg-brand px-5 py-2 text-onBrand">שמירה</button>
         <button
           type="button"
