@@ -7,7 +7,7 @@
 html { scrollbar-gutter: stable; }
 html, body { background: #FBF8F4; color: #2A1A0E; }
 body {
-  font-family: Assistant, "Arial Hebrew", sans-serif;
+  font-family: Heebo, "Arial Hebrew", sans-serif;
   font-variant-numeric: tabular-nums;
   background-color: #F7F1E8;
   background-image:
@@ -33,7 +33,7 @@ body::before {
   right: 12px;
   z-index: 80;
   margin: 0;
-  font-family: "Frank Ruhl Libre", David, serif;
+  font-family: Heebo, "Arial Hebrew", sans-serif;
   font-size: 11px;
   line-height: 1;
   color: rgb(255 248 238 / 78%);
@@ -80,7 +80,7 @@ body::before {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(2%, -2%, 0); }
 }
-h1, h2, .display { font-family: "Frank Ruhl Libre", David, serif; font-weight: 500; }
+h1, h2, .display { font-family: Heebo, "Arial Hebrew", sans-serif; font-weight: 500; }
 button, input, select, textarea { font: inherit; }
 * { box-sizing: border-box; }
 
@@ -268,7 +268,7 @@ input:focus, select:focus, textarea:focus {
 
 .data-table thead th { background: linear-gradient(180deg, #FFFCF8, #F5EFE7); font-weight: 700; letter-spacing: 0.04em; }
 .data-table tbody td { padding-top: 14px; padding-bottom: 14px; }
-.row-name { font-family: "Frank Ruhl Libre", David, serif; font-size: 18px; font-weight: 500; }
+.row-name { font-family: Heebo, "Arial Hebrew", sans-serif; font-size: 18px; font-weight: 500; }
 .data-table tbody tr { transition: background 180ms ease, box-shadow 180ms ease; }
 .data-table tbody tr:hover { background: #FBF6EE; box-shadow: inset -3px 0 0 #D5A956; }
 .data-table tbody tr.picked { background: #FBF6EE; }
@@ -349,7 +349,7 @@ input:focus, select:focus, textarea:focus {
 /* יומן */
 .fc { --fc-border-color: #E8DDD0; --fc-page-bg-color: transparent; --fc-neutral-bg-color: #FBF8F4; --fc-today-bg-color: transparent; --fc-list-event-hover-bg-color: #F5EFE7; }
 .fc .fc-toolbar { margin-bottom: 16px !important; align-items: center; flex-wrap: wrap; gap: 8px; }
-.fc .fc-toolbar-title { font-family: "Frank Ruhl Libre", David, serif; font-size: 28px; font-weight: 500; color: #2A1A0E; white-space: nowrap; }
+.fc .fc-toolbar-title { font-family: Heebo, "Arial Hebrew", sans-serif; font-size: 28px; font-weight: 500; color: #2A1A0E; white-space: nowrap; }
 .fc .fc-button {
   background: #F5EFE7 !important;
   border: 1px solid transparent !important;
@@ -484,6 +484,48 @@ input:focus, select:focus, textarea:focus {
 }
 .drawer p, .drawer li, .drawer span { overflow-wrap: anywhere; }
 .drawer .seg { flex-wrap: wrap; }
+
+.guest-page { animation: guest-in 620ms cubic-bezier(.16, 1, .3, 1); }
+.guest-mark {
+  position: fixed;
+  top: 10px;
+  right: 14px;
+  z-index: 20;
+  font-family: Heebo, "Arial Hebrew", sans-serif;
+  font-size: 12px;
+  color: #86601C;
+  pointer-events: none;
+}
+.guest-rise > * { animation: guest-in 560ms cubic-bezier(.16, 1, .3, 1) backwards; }
+.guest-rise > *:nth-child(1) { animation-delay: 40ms; }
+.guest-rise > *:nth-child(2) { animation-delay: 110ms; }
+.guest-rise > *:nth-child(3) { animation-delay: 170ms; }
+.guest-rise > *:nth-child(4) { animation-delay: 230ms; }
+.guest-rise > *:nth-child(5) { animation-delay: 290ms; }
+.guest-step { animation: guest-swap 380ms cubic-bezier(.16, 1, .3, 1); }
+.guest-card {
+  border-radius: 24px;
+  background: rgb(255 255 255 / 82%);
+  border: 1px solid rgb(232 221 208 / 90%);
+  box-shadow: 0 16px 40px rgb(42 21 5 / 8%);
+  backdrop-filter: blur(8px);
+}
+.guest-bar { height: 4px; overflow: hidden; border-radius: 999px; background: #E8DDD0; }
+.guest-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #F3D27A, #D5A956 55%, #86601C);
+  transition: width 420ms cubic-bezier(.22, 1, .36, 1);
+}
+@keyframes guest-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes guest-swap {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before {

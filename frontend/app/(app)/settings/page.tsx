@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, ChevronDown, Clock, Coins, MessageSquare } from "lucide-react";
+import { CalendarDays, ChevronDown, Clock, Coins, MessageSquare, Wallet } from "lucide-react";
 import { api } from "@/lib/api";
 import { pushToast } from "@/components/toast";
 
@@ -18,6 +18,7 @@ const templates: Record<string, { title: string; when: string }> = {
 const tabs = [
   { id: "hours", label: "שעות", hint: "מתי הקליניקה פתוחה", icon: Clock },
   { id: "prices", label: "מחירון", hint: "ברירת מחדל לכל שירות", icon: Coins },
+  { id: "budget", label: "תקציב", hint: "הוצאה שיווקית לפי חודש", icon: Wallet },
   { id: "messages", label: "הודעות", hint: "הטקסטים שנשלחים", icon: MessageSquare },
   { id: "calendar", label: "יומן גוגל", hint: "כותרות לבדיקה", icon: CalendarDays },
 ] as const;
@@ -28,6 +29,7 @@ type Settings = {
   settings: { markedWeek?: Record<string, { start: string; end: string } | null>; clinic?: { address: string; unit: string; parking: string } };
   automations: { key: string; messageTemplate: string; active: boolean }[];
   services: { id: string; name: string; price: number; durationMin: number }[];
+  campaigns: { id: string; name: string; spend: { month: string; amount: number }[] }[];
 };
 
 export default function SettingsPage() {
@@ -168,6 +170,7 @@ export default function SettingsPage() {
                     </div>
                   </>
                 ) : null}
+                {tab === "budget" ? <Budget campaigns={data.campaigns} onSaved={(campaigns) => setData((current) => current && { ...current, campaigns })} /> : null}
                 {tab === "messages" ? (
                   <>
                     <h2 className="text-2xl">הודעות</h2>
@@ -232,6 +235,131 @@ export default function SettingsPage() {
         </div>
       </div>
     </section>
+  );
+}
+
+const monthNames = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"];
+
+function MonthPick({ value, onChange }: { value: string; onChange: (month: string) => void }) {
+  const [yearText, part] = value.split("-");
+  const year = Number(yearText);
+  const selected = Number(part);
+
+  function choose(nextYear: number, nextMonth: number) {
+    onChange(`${nextYear}-${String(nextMonth).padStart(2, "0")}`);
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between">
+        <button type="button" aria-label="שנה קודמת" onClick={() => choose(year - 1, selected)} className="settings-still grid h-9 w-9 place-items-center rounded-[10px] border border-line bg-white text-muted">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
+        <span className="text-lg font-bold text-ink">{year}</span>
+        <button type="button" aria-label="שנה הבאה" onClick={() => choose(year + 1, selected)} className="settings-still grid h-9 w-9 place-items-center rounded-[10px] border border-line bg-white text-muted">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+        {monthNames.map((name, index) => {
+          const on = index + 1 === selected;
+          return (
+            <button key={name} type="button" onClick={() => choose(year, index + 1)} className={`rounded-full px-2 py-2 text-sm ${on ? "bg-brand font-bold text-onBrand" : "bg-sunken text-ink"}`}>{name}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function monthKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthLabel(month: string) {
+  const [year, part] = month.split("-").map(Number);
+  return new Date(year, part - 1, 1).toLocaleDateString("he-IL", { month: "long", year: "numeric" });
+}
+
+function monthsOf(campaigns: Settings["campaigns"]) {
+  const totals = new Map<string, number>();
+  for (const campaign of campaigns) {
+    for (const row of campaign.spend) totals.set(row.month, (totals.get(row.month) ?? 0) + row.amount);
+  }
+  return [...totals.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([month, amount]) => ({ month, amount }));
+}
+
+function Budget({ campaigns, onSaved }: { campaigns: Settings["campaigns"]; onSaved: (campaigns: Settings["campaigns"]) => void }) {
+  const rows = monthsOf(campaigns);
+  const [month, setMonth] = useState(monthKey);
+  const [amount, setAmount] = useState("");
+  const known = rows.some((row) => row.month === month);
+
+  async function save(nextMonth: string, nextAmount: number) {
+    const result = await api<{ campaigns: Settings["campaigns"] }>("/settings/budget", {
+      method: "PUT",
+      body: JSON.stringify({ month: nextMonth, amount: nextAmount }),
+    });
+    onSaved(result.campaigns);
+    pushToast("נשמר");
+  }
+
+  return (
+    <>
+      <h2 className="text-2xl">תקציב שיווק</h2>
+      <p className="mt-1 text-muted">הסכום של כל חודש הוא ההוצאה בדשבורד. ממנו מחושבות עלות לליד ועלות ללקוחה.</p>
+      {rows.length === 0 ? <p className="mt-4 text-muted">עוד אין תקציב. מוסיפים חודש וסכום.</p> : (
+        <div className="mt-4 space-y-2">
+          {rows.map((row, index) => (
+            <div key={row.month} className="settings-row flex items-center justify-between gap-3 rounded-xl border border-line bg-white/75 px-4 py-3" style={{ animationDelay: `${index * 40}ms` }}>
+              <span className="font-bold">{monthLabel(row.month)}</span>
+              <label className="flex items-center gap-2 text-sm text-muted">
+                <input
+                  type="number"
+                  min={0}
+                  aria-label={`תקציב ${monthLabel(row.month)}`}
+                  defaultValue={row.amount}
+                  key={`${row.month}-${row.amount}`}
+                  onBlur={(event) => {
+                    const value = Number(event.target.value);
+                    if (!Number.isInteger(value) || value < 0) {
+                      pushToast("סכום לא תקין");
+                      event.target.value = String(row.amount);
+                      return;
+                    }
+                    if (value === row.amount) return;
+                    save(row.month, value).catch((error: Error) => pushToast(error.message));
+                  }}
+                  className="w-28 rounded-md border border-lineStrong bg-white px-3 py-2 text-ink"
+                />
+                <span className="text-goldInk">₪</span>
+              </label>
+            </div>
+          ))}
+        </div>
+      )}
+      <form
+        className="mt-4 rounded-xl border border-line bg-white/80 p-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const value = Number(amount);
+          if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !Number.isInteger(value) || value < 0) {
+            pushToast("סכום לא תקין");
+            return;
+          }
+          save(month, value).then(() => setAmount("")).catch((error: Error) => pushToast(error.message));
+        }}
+      >
+        <p className="text-sm text-muted">חודש</p>
+        <MonthPick value={month} onChange={setMonth} />
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="text-sm text-muted">סכום
+            <input value={amount} onChange={(event) => setAmount(event.target.value.replace(/\D/g, ""))} inputMode="numeric" required placeholder="0" className="mt-1 block w-28 rounded-md border border-lineStrong bg-white px-3 py-2 text-ink" />
+          </label>
+          <button className="rounded-full bg-brand px-5 py-2 text-onBrand">{known ? "עדכון החודש" : "הוספת חודש"}</button>
+        </div>
+      </form>
+    </>
   );
 }
 

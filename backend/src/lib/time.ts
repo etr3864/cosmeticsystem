@@ -19,9 +19,13 @@ export function hebrewDate(date: Date): string {
 }
 
 export function atJerusalem(day: string, minutes: number): Date {
-  const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
-  const mins = String(minutes % 60).padStart(2, "0");
-  return fromZonedTime(`${day} ${hours}:${mins}:00`, TIMEZONE);
+  const extraDays = Math.floor(minutes / 1440);
+  const within = ((minutes % 1440) + 1440) % 1440;
+  const hours = String(Math.floor(within / 60)).padStart(2, "0");
+  const mins = String(within % 60).padStart(2, "0");
+  const date = fromZonedTime(`${day} ${hours}:${mins}:00`, TIMEZONE);
+  if (extraDays) date.setUTCDate(date.getUTCDate() + extraDays);
+  return date;
 }
 
 export function addDays(day: string, amount: number): string {

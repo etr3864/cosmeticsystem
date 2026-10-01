@@ -18,8 +18,8 @@ module.exports = {
         onBrand: "#FFF8EE",
       },
       fontFamily: {
-        display: ['"Frank Ruhl Libre"', "David", "serif"],
-        sans: ["Assistant", "Arial Hebrew", "sans-serif"],
+        display: ["Heebo", "Arial Hebrew", "sans-serif"],
+        sans: ["Heebo", "Arial Hebrew", "sans-serif"],
       },
       boxShadow: {
         card: "0 1px 2px rgb(42 21 5 / 5%)",

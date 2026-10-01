@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { GuestHero, GuestNote, GuestScreen, firstOf, guestClock, guestDay, guestWhen } from "@/components/guest";
 
 type Day = { day: string; slots: string[] };
 
@@ -11,6 +12,9 @@ export default function PartnersPage({ params }: { params: Promise<{ token: stri
   const [days, setDays] = useState<Day[]>([]);
   const [slot, setSlot] = useState("");
   const [done, setDone] = useState("");
+  const [error, setError] = useState("");
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     params.then(async (value) => {
@@ -19,53 +23,92 @@ export default function PartnersPage({ params }: { params: Promise<{ token: stri
       setName(data.name);
       const slots = await api<{ days: Day[] }>(`/public/${value.token}/slots`);
       setDays(slots.days.filter((day) => day.slots.length > 0));
-    });
+      setReady(true);
+    }).catch((err: Error) => setError(err.message));
   }, [params]);
 
-  const share = typeof window === "undefined" ? "" : `https://wa.me/?text=${encodeURIComponent(`${name} שמרה לך 10% על תור אצל נועה. הקישור פותח את השעות הפנויות, עם ההנחה כבר על המחיר: ${window.location.href}`)}`;
+  const share = typeof window === "undefined" ? "" : `https://wa.me/?text=${encodeURIComponent(`${name} שמרה לך 10% על תור אצל נועה. נכנסים, בוחרים שעה, וההנחה כבר על המחיר: ${window.location.href}`)}`;
 
   async function book(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     const data = new FormData(event.currentTarget);
-    if (!slot) {
-      await api(`/public/${token}/join`, { method: "POST", body: JSON.stringify({ name: data.get("name"), phone: data.get("phone") }) });
-      setDone("נרשמת. נועה תחזור אלייך לקביעת התור.");
-      return;
+    setBusy(true);
+    setError("");
+    try {
+      if (!slot) {
+        await api(`/public/${token}/join`, { method: "POST", body: JSON.stringify({ name: data.get("name"), phone: data.get("phone") }) });
+        setDone("השם והטלפון נשמרו. נועה תחזור עם שעה.");
+        return;
+      }
+      const result = await api<{ startsAt: string }>(`/public/${token}/book-friend`, {
+        method: "POST",
+        body: JSON.stringify({ name: data.get("name"), phone: data.get("phone"), startsAt: slot }),
+      });
+      setDone(`התור נקבע ל${guestWhen(result.startsAt)}, עם 10% כבר על המחיר.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "השעה נתפסה");
+      setBusy(false);
     }
-    const result = await api<{ startsAt: string }>(`/public/${token}/book-friend`, {
-      method: "POST",
-      body: JSON.stringify({ name: data.get("name"), phone: data.get("phone"), startsAt: slot }),
-    });
-    setDone(`התור נקבע ל־${new Date(result.startsAt).toLocaleString("he-IL")}, עם 10% כבר על המחיר.`);
+  }
+
+  if (error && !ready) {
+    return (
+      <GuestScreen>
+        <GuestHero kicker="נועה טורג'מן" title="הקישור לא נפתח">
+          <GuestNote>{error}</GuestNote>
+        </GuestHero>
+      </GuestScreen>
+    );
+  }
+  if (!ready) {
+    return (
+      <GuestScreen>
+        <GuestHero kicker="נועה טורג'מן" title="רגע" />
+      </GuestScreen>
+    );
   }
 
   return (
-    <main className="page-in mx-auto min-h-screen max-w-md px-6 py-10">
-      <img src="/logo.jpg" alt="" className="mx-auto mb-4 h-20 w-20 rounded-full" />
-      <h1 className="text-center text-[32px]">{name}</h1>
-      <p className="mt-3 text-center text-muted">הדף הזה הוא הזמנה. חברה שנכנסת קובעת תור עם 10% הנחה. אחרי שהיא מגיעה, נשמר זיכוי של 10% לשלושה חודשים.</p>
-      <a href={share} target="_blank" className="mt-6 block rounded-md bg-[#3F6B3A] py-3 text-center text-white">שליחה לחברה בוואטסאפ</a>
-      {done ? <p className="mt-6 text-center">{done}</p> : (
-        <form onSubmit={book} className="mt-6 space-y-3">
-          <input name="name" required placeholder="שם" className="w-full rounded-md border border-lineStrong bg-surface px-3 py-3" />
-          <input name="phone" required placeholder="טלפון" className="w-full rounded-md border border-lineStrong bg-surface px-3 py-3" />
-          <div className="max-h-64 space-y-3 overflow-auto">
-            {days.map((day) => (
+    <GuestScreen>
+      <GuestHero kicker={name ? `${firstOf(name)} הזמינה אותך` : "הזמנה"} title="10% על התור הראשון">
+        <GuestNote>בוחרים שעה ללק ג&apos;ל. ההנחה כבר על המחיר. אחרי ההגעה, למי שהזמינה נשמר 10% לשלושה חודשים.</GuestNote>
+      </GuestHero>
+      <a href={share} target="_blank" className="mt-6 block rounded-full bg-[#3F6B3A] py-3 text-center text-white">שליחת ההזמנה לחברה</a>
+      {done ? (
+        <section className="guest-card guest-step mt-6 p-6 text-center">
+          <h2 className="text-[32px] text-ink">נשמר</h2>
+          <p className="mt-2 leading-7 text-muted">{done}</p>
+        </section>
+      ) : (
+        <form onSubmit={book} className="guest-card mt-6 space-y-4 p-6">
+          <p className="text-sm leading-6 text-muted">אם הקישור הגיע אלייך, מלאי שם וטלפון ובחרי שעה.</p>
+          <input name="name" required placeholder="שם" className="w-full rounded-2xl border border-lineStrong bg-white px-4 py-3" />
+          <input name="phone" required placeholder="טלפון" inputMode="tel" className="w-full rounded-2xl border border-lineStrong bg-white px-4 py-3" />
+          <div className="space-y-5">
+            {days.length === 0 ? <p className="text-sm text-muted">אין שעות פנויות בחלון הקרוב. אפשר להשאיר פרטים, ונועה תחזור עם שעה.</p> : days.map((day) => (
               <div key={day.day}>
-                <p className="mb-1 text-sm text-faint">{new Date(day.day).toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "numeric" })}</p>
+                <p className="mb-2 text-sm text-faint">{guestDay(day.day)}</p>
                 <div className="flex flex-wrap gap-2">
                   {day.slots.map((item) => (
-                    <button type="button" key={item} onClick={() => setSlot(item)} className={`rounded-full px-3 py-1 ${slot === item ? "bg-brand text-onBrand" : "bg-sunken"}`}>
-                      {new Date(item).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}
+                    <button
+                      type="button"
+                      key={item}
+                      onClick={() => setSlot(slot === item ? "" : item)}
+                      className={`rounded-full px-3 py-1.5 ${slot === item ? "bg-brand text-onBrand" : "bg-sunken text-ink"}`}
+                    >
+                      {guestClock(item)}
                     </button>
                   ))}
                 </div>
               </div>
             ))}
           </div>
-          <button className="w-full rounded-md bg-brand py-3 text-onBrand">{slot ? "קביעת התור" : "השארת פרטים"}</button>
+          {slot ? <p className="text-sm text-goldInk">השעה שנבחרה: {guestWhen(slot)}</p> : null}
+          {error ? <p className="text-sm text-[#9B2F45]">{error}</p> : null}
+          <button disabled={busy} className="w-full rounded-full bg-brand py-3 text-onBrand">{slot ? "קביעת התור" : "השארת פרטים בלי שעה"}</button>
         </form>
       )}
-    </main>
+    </GuestScreen>
   );
 }

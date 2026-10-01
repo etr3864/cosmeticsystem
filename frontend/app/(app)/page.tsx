@@ -7,7 +7,7 @@ import { useDismiss } from "@/components/dismiss";
 type Dash = {
   income: number;
   marketing: { leads: number; spend: number; cpl: number; cac: number };
-  sales: { booked: number; leadToBook: number; leadToArrive: number };
+  sales: { booked: number; arrived: number; leadToBook: number; leadToArrive: number };
   operations: { arrived: number; noShow: number; showRate: number; atRisk: number; dormant: number };
   clients: { active: number; regulars: number; credits: number };
 };
@@ -81,6 +81,7 @@ export default function HomePage() {
             ]} />
             <Panel delay={160} title="מכירות" tiles={[
               ["נקבע תור", data.sales.booked],
+              ["הגיעו מהלידים", data.sales.arrived],
               ["ליד לתור", `${data.sales.leadToBook}%`],
               ["ליד להגעה", `${data.sales.leadToArrive}%`],
             ]} />

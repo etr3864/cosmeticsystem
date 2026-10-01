@@ -267,10 +267,9 @@ export function ContactDrawer({ id, kind, onClose, onChanged }: { id: string; ki
           </dl>
         </section>
 
-        <section className="mt-4 rounded-xl bg-white/75 p-4">
+        {person.appointments.some((item) => item.status !== "בוטל") ? <section className="mt-4 rounded-xl bg-white/75 p-4">
           <h3 className="text-lg">תורים</h3>
-          {person.appointments.every((item) => item.status === "בוטל") ? <p className="mt-3 text-muted">אין תורים.</p> : (
-            <div className={`mt-3 space-y-4 pe-1 ${editingId ? "" : "max-h-80 overflow-y-auto"}`}>
+          <div className={`mt-3 space-y-4 pe-1 ${editingId ? "" : "max-h-80 overflow-y-auto"}`}>
               {visitGroups(person.appointments.filter((item) => item.status !== "בוטל")).map((group) => (
                 <div key={group.label}>
                   <p className="sticky top-0 z-10 bg-[#FBF8F4]/95 py-1 text-sm font-bold text-goldInk">{group.label}</p>
@@ -329,13 +328,8 @@ export function ContactDrawer({ id, kind, onClose, onChanged }: { id: string; ki
                   </ul>
                 </div>
               ))}
-            </div>
-          )}
-        </section>
-
-        <section className="mt-4 rounded-xl bg-white/75 p-4">
-          <ForYou contact={contact} />
-        </section>
+          </div>
+        </section> : null}
 
         <section className="mt-4 rounded-xl bg-white/75 p-4">
           <h3 className="text-lg">תיעוד והערות</h3>
@@ -493,22 +487,18 @@ function stamp(value: string | null) {
 }
 
 function ForYou({ contact }: { contact: Contact }) {
+  if (!contact.forYou.filled) return null;
   return (
-    <div>
+    <div className="mt-8">
       <h3 className="text-lg">תוצאות שאלון</h3>
-      <p className="mt-2 text-sm text-muted">התשובות שמילאו יחד בלק ג'ל, כשהיא מגיעה. בטיפולי פנים אין שאלון.</p>
-      {!contact.forYou.applies ? <p className="mt-4">אין לה תור או כרטיס של לק ג'ל, אז אין כאן מה למלא.</p> : null}
-      {contact.forYou.applies && contact.forYou.filled ? (
-        <ul className="mt-4 space-y-3">
-          {contact.forYou.items.map((item) => (
-            <li key={item.label} className="rounded-xl bg-white/70 p-3">
-              <p className="text-sm text-faint">{item.label}</p>
-              <p className="font-bold">{item.value}</p>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {contact.forYou.applies && !contact.forYou.filled ? <p className="mt-4">עוד לא מילאו יחד.</p> : null}
+      <ul className="mt-4 space-y-3">
+        {contact.forYou.items.map((item) => (
+          <li key={item.label} className="rounded-xl bg-white/70 p-3">
+            <p className="text-sm text-faint">{item.label}</p>
+            <p className="font-bold">{item.value}</p>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -591,6 +581,8 @@ function Notes({ person, note, setNote, onSaved }: { person: Contact; note: stri
           ))}
         </div>
       )}
+      <ForYou contact={person} />
+      <Links contact={person} questionnaireFilled={person.forYou.filled} onChanged={onSaved} />
       <Fold title="מה קרה" count={activity.length} open={historyOpen} onToggle={() => setHistoryOpen((value) => !value)}>
         {activity.length === 0 ? <p className="mt-3 text-muted">עוד אין אירועים.</p> : (
           <ol className="mt-4">
@@ -609,7 +601,6 @@ function Notes({ person, note, setNote, onSaved }: { person: Contact; note: stri
           </ol>
         )}
       </Fold>
-      <Links contact={person} questionnaireFilled={person.forYou.filled} onChanged={onSaved} />
     </div>
   );
 }

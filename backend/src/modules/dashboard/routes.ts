@@ -10,9 +10,11 @@ dashboardRoutes.get("/", async (c) => {
   const from = new Date(c.req.query("from") ?? new Date(now.getFullYear(), now.getMonth(), 1).toISOString());
   const to = new Date(c.req.query("to") ?? now.toISOString());
   const month = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}`;
-  const [leads, booked, arrived, noShow, payments, spend, active, regulars, atRisk, dormant, newClients, arrivedLeads, credits] = await Promise.all([
-    prisma.contact.count({ where: { createdAt: { gte: from, lte: to }, salesStatus: { not: "לקוחה פעילה" } } }),
-    prisma.contact.count({ where: { createdAt: { gte: from, lte: to }, salesStatus: { in: ["נקבע תור AI", "נקבע תור אנושי", "לקוחה פעילה", "לא הגיעה"] } } }),
+  const entered = { createdAt: { gte: from, lte: to } };
+  const showedUp = { some: { status: "הגיעה" as const, startsAt: { gte: from, lte: to } } };
+  const [leads, booked, arrived, noShow, payments, spend, active, regulars, atRisk, dormant, newCustomers, arrivedFromLeads, credits] = await Promise.all([
+    prisma.contact.count({ where: entered }),
+    prisma.contact.count({ where: { ...entered, salesStatus: { in: ["נקבע תור AI", "נקבע תור אנושי", "לקוחה פעילה", "לא הגיעה"] } } }),
     prisma.appointment.count({ where: { status: "הגיעה", startsAt: { gte: from, lte: to } } }),
     prisma.appointment.count({ where: { status: "לא הגיעה", startsAt: { gte: from, lte: to } } }),
     prisma.appointment.aggregate({ where: { status: "הגיעה", startsAt: { gte: from, lte: to } }, _sum: { amountPaid: true } }),
@@ -21,8 +23,10 @@ dashboardRoutes.get("/", async (c) => {
     prisma.contactService.count({ where: { opsStatus: "קבועה" } }),
     prisma.contactService.count({ where: { opsStatus: "בסיכון" } }),
     prisma.contactService.count({ where: { opsStatus: "רדומה" } }),
-    prisma.contactService.count({ where: { firstVisitAt: { gte: from, lte: to } } }),
-    prisma.contact.count({ where: { createdAt: { gte: from, lte: to }, appointments: { some: { status: "הגיעה" } } } }),
+    prisma.contact.count({
+      where: { appointments: { ...showedUp, none: { status: "הגיעה", startsAt: { lt: from } } } },
+    }),
+    prisma.contact.count({ where: { ...entered, appointments: showedUp } }),
     prisma.credit.aggregate({ where: { expiresAt: { gt: now }, remainingPct: { gt: 0 } }, _sum: { remainingPct: true } }),
   ]);
   const spent = spend._sum.amount ?? 0;
@@ -35,12 +39,13 @@ dashboardRoutes.get("/", async (c) => {
       leads,
       spend: spent,
       cpl: leads ? Math.round(spent / leads) : 0,
-      cac: newClients ? Math.round(spent / newClients) : 0,
+      cac: newCustomers ? Math.round(spent / newCustomers) : 0,
     },
     sales: {
       booked,
+      arrived: arrivedFromLeads,
       leadToBook: leads ? Math.round((booked / leads) * 100) : 0,
-      leadToArrive: leads ? Math.round((arrivedLeads / leads) * 100) : 0,
+      leadToArrive: leads ? Math.round((arrivedFromLeads / leads) * 100) : 0,
     },
     operations: {
       arrived,

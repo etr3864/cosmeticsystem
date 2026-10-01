@@ -25,6 +25,7 @@ publicRoutes.get("/:token", async (c) => {
     price: service?.price ?? 120,
     serviceId: service?.id ?? null,
     discounted: priceAfterPercent(service?.price ?? 120, DISCOUNT_PERCENT),
+    expiresAt: link.expiresAt,
     questions: questionnaire?.questions ?? [],
     title: questionnaire?.title ?? "בשבילך",
   });

@@ -181,8 +181,8 @@ export function RecordTable({ kind }: { kind: "lead" | "client" }) {
         </select>
         {selected.length > 0 ? (
           <>
-            <select defaultValue="" onChange={(event) => { if (event.target.value) void apply(event.target.value); event.target.value = ""; }} className="rounded-md border border-brand bg-brand px-3 py-2 text-onBrand">
-              <option value="">{selected.length} נבחרו</option>
+            <select defaultValue="" onChange={(event) => { if (event.target.value) void apply(event.target.value); event.target.value = ""; }} className="rounded-md border border-lineStrong bg-white px-3 py-2 text-ink">
+              <option value="">שינוי סטטוס למי שנבחר</option>
               {(kind === "lead" ? leadStatuses : ["עזבה"]).map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
             <button onClick={() => setConfirmDelete(true)} className="rounded-md bg-[#F7E0E5] px-3 py-2 text-[#9B2F45]">מחיקה</button>

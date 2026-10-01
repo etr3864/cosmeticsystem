@@ -71,6 +71,24 @@ settingsRoutes.post("/campaigns", async (c) => {
   return c.json(campaign, 201);
 });
 
+settingsRoutes.put("/budget", async (c) => {
+  const body = z.object({
+    month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+    amount: z.number().int().min(0),
+  }).parse(await c.req.json());
+  const existing = await prisma.campaignSpend.findMany({ where: { month: body.month }, orderBy: { createdAt: "asc" } });
+  if (existing.length === 0) {
+    const campaign = await prisma.campaign.findFirst({ where: { name: "שיווק" } })
+      ?? await prisma.campaign.create({ data: { name: "שיווק" } });
+    await prisma.campaignSpend.create({ data: { campaignId: campaign.id, month: body.month, amount: body.amount } });
+  } else {
+    await prisma.campaignSpend.update({ where: { id: existing[0].id }, data: { amount: body.amount } });
+    if (existing.length > 1) await prisma.campaignSpend.deleteMany({ where: { id: { in: existing.slice(1).map((row) => row.id) } } });
+  }
+  const campaigns = await prisma.campaign.findMany({ include: { spend: true }, orderBy: { name: "asc" } });
+  return c.json({ campaigns });
+});
+
 settingsRoutes.post("/campaigns/:id/spend", async (c) => {
   const body = z.object({ month: z.string(), amount: z.number() }).parse(await c.req.json());
   const spend = await prisma.campaignSpend.upsert({
