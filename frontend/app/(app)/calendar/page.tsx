@@ -221,7 +221,7 @@ export default function CalendarPage() {
 
 function DayLabel({ arg, onPlus }: { arg: DayCellContentArg; onPlus: () => void }) {
   const anchor = useRef<HTMLSpanElement>(null);
-  const [frame, setFrame] = useState<HTMLElement | null>(null);
+  const [frame, setFrame] = useState<Element | null>(null);
   useEffect(() => {
     setFrame(anchor.current?.closest(".fc-daygrid-day-frame") ?? null);
   }, [arg.date]);
