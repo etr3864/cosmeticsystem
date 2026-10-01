@@ -7,6 +7,7 @@ import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { pushToast, Toaster } from "@/components/toast";
 import { useDismiss } from "@/components/dismiss";
+import { BackButton } from "@/components/back-button";
 
 const items = [
   { href: "/", label: "ראשי", icon: LayoutDashboard },
@@ -111,7 +112,8 @@ function LeadModal({ onClose, onCreate, onDone }: { onClose: () => void; onCreat
   const { leaving, requestClose, onAnimationEnd } = useDismiss(onClose);
   return (
     <div className={`modal-bg fixed inset-0 grid place-items-center bg-[rgb(42_21_5/40%)] p-4${leaving ? " out" : ""}`}>
-      <form onSubmit={async (event) => { try { const ok = await onCreate(event); if (ok) requestClose(() => { onClose(); onDone(); }); } catch (error) { pushToast(error instanceof Error ? error.message : "לא הצלחנו"); } }} onAnimationEnd={onAnimationEnd} className={`max-h-full w-full max-w-md overflow-y-auto rounded-xl bg-surface p-5 shadow-sheet sm:p-6 ${leaving ? "sheet-out" : "sheet-in"}`}>
+      <form onSubmit={async (event) => { try { const ok = await onCreate(event); if (ok) requestClose(() => { onClose(); onDone(); }); } catch (error) { pushToast(error instanceof Error ? error.message : "לא הצלחנו"); } }} onAnimationEnd={onAnimationEnd} className={`has-back max-h-full w-full max-w-md overflow-y-auto rounded-xl bg-surface p-4 shadow-sheet sm:p-6 ${leaving ? "sheet-out" : "sheet-in"}`}>
+        <BackButton onClick={() => requestClose()} />
         <h2 className="mb-4 text-2xl">ליד חדש</h2>
         <input name="name" required placeholder="שם" className="mb-3 w-full rounded-md border border-lineStrong px-3 py-3" />
         <input name="phone" required placeholder="טלפון" className="mb-3 w-full rounded-md border border-lineStrong px-3 py-3" />

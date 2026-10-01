@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
+import { BackButton } from "@/components/back-button";
 import { pushToast } from "@/components/toast";
 import { useDismiss } from "@/components/dismiss";
 
@@ -146,7 +147,8 @@ export function BookingDialog({ startsAt, onClose, onBooked, existing, lockConta
     <>
       <button className={`drawer-bg book-layer${leaving ? " out" : ""}`} aria-label="סגירה" onClick={() => requestClose()} />
       <div className="book-layer pointer-events-none fixed inset-0 flex items-center justify-center p-4">
-      <form onSubmit={submit} onAnimationEnd={onAnimationEnd} className={`glass pointer-events-auto grid max-h-[min(100%,calc(100dvh-2rem))] w-[min(980px,100%)] grid-cols-1 gap-4 overflow-y-auto overscroll-contain rounded-xl p-4 sm:p-5 md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)] ${leaving ? "sheet-out" : "sheet-in"}`}>
+      <form onSubmit={submit} onAnimationEnd={onAnimationEnd} className={`glass has-back pointer-events-auto grid max-h-[min(100%,calc(100dvh-2rem))] w-[min(980px,100%)] grid-cols-1 gap-4 overflow-y-auto overscroll-contain rounded-xl p-4 sm:p-5 md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)] ${leaving ? "sheet-out" : "sheet-in"}`}>
+        <BackButton onClick={() => requestClose()} />
         <div className="md:col-span-2">
           <p className="text-[12px] font-bold tracking-[0.16em] text-goldInk">{existing ? "עריכת תור" : "תור חדש"}</p>
           <h2 className="mt-1 text-2xl">{when.toLocaleString("he-IL", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</h2>

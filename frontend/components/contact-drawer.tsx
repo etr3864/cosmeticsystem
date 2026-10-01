@@ -2,6 +2,7 @@
 
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { BackButton } from "@/components/back-button";
 import { pushToast } from "@/components/toast";
 import { BookingDialog } from "@/components/booking-dialog";
 import { useDismiss } from "@/components/dismiss";
@@ -62,7 +63,7 @@ export function ContactDrawer({ id, kind, onClose, onChanged }: { id: string; ki
   useEffect(() => { load().catch((error: Error) => pushToast(error.message)); }, [id]);
 
   if (!contact) {
-    return (<><button className={`drawer-bg${leaving ? " out" : ""}`} aria-label="סגירה" onClick={() => requestClose()} /><aside onAnimationEnd={onAnimationEnd} className={`drawer glass ${leaving ? "sheet-out" : "sheet-in"}`}><p>טוען</p></aside></>);
+    return (<><button className={`drawer-bg${leaving ? " out" : ""}`} aria-label="סגירה" onClick={() => requestClose()} /><aside onAnimationEnd={onAnimationEnd} className={`drawer glass ${leaving ? "sheet-out" : "sheet-in"}`}><BackButton onClick={() => requestClose()} /><p>טוען</p></aside></>);
   }
   const person = contact;
 
@@ -200,6 +201,7 @@ export function ContactDrawer({ id, kind, onClose, onChanged }: { id: string; ki
     <>
       <button className={`drawer-bg${leaving ? " out" : ""}`} aria-label="סגירה" onClick={() => requestClose()} />
       <aside onAnimationEnd={onAnimationEnd} className={`drawer glass ${leaving ? "sheet-out" : "sheet-in"}`}>
+        <BackButton onClick={() => requestClose()} />
         <div className={isClient ? "rounded-xl bg-brand px-4 py-4 text-onBrand" : "rounded-xl border border-[#E8DDD0] bg-[#FBF6EE] px-4 py-4 text-ink"}>
           <p className={`text-[12px] font-bold tracking-[0.16em] ${isClient ? "" : "text-goldInk"}`}>{isClient ? "לקוחה" : "ליד"}</p>
           <h2 className="mt-1 break-words text-[28px] leading-9 sm:text-[32px] sm:leading-10">{person.name}</h2>
