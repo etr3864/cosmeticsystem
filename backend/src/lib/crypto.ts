@@ -1,5 +1,11 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
 
+export function assertEncryptionKey() {
+  if (process.env.NODE_ENV === "production" && !process.env.ENCRYPTION_KEY) {
+    throw new Error("ENCRYPTION_KEY is required");
+  }
+}
+
 function key(): Buffer {
   const secret = process.env.ENCRYPTION_KEY ?? "dev-only-change-me-32b-key!!";
   return scryptSync(secret, "noa-secret", 32);

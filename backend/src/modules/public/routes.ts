@@ -4,7 +4,7 @@ import { prisma } from "@noa/db";
 import { CLINIC_ADDRESS, CLINIC_PARKING, CLINIC_UNIT, DISCOUNT_PERCENT, priceAfterPercent } from "@noa/shared";
 import { findLink } from "../links/service.js";
 import { createAppointment } from "../appointments/service.js";
-import { openSlots } from "../appointments/routes.js";
+import { openSlots, slotIsOpen } from "../appointments/slots.js";
 import { jsonError } from "../../http/errors.js";
 import { normalizePhone } from "@noa/shared";
 
@@ -13,6 +13,7 @@ export const publicRoutes = new Hono();
 publicRoutes.get("/:token", async (c) => {
   const link = await findLink(c.req.param("token"));
   if (!link) return jsonError(c, 404, "not_found", "הקישור לא פעיל");
+  if (link.kind === "discount_booking" && link.usedAt) return c.json({ expired: true, message: "ההטבה כבר נוצלה" });
   if (link.expired) return c.json({ expired: true, message: "ההטבה הסתיימה" });
   const clinic = await prisma.setting.findUnique({ where: { key: "clinic" } });
   const service = await prisma.service.findFirst({ where: { code: "NAILS", active: true } });
@@ -33,7 +34,7 @@ publicRoutes.get("/:token", async (c) => {
 
 publicRoutes.get("/:token/slots", async (c) => {
   const link = await findLink(c.req.param("token"));
-  if (!link || link.expired) return jsonError(c, 404, "not_found", "ההטבה הסתיימה");
+  if (!link || link.expired || link.usedAt) return jsonError(c, 404, "not_found", "ההטבה הסתיימה");
   return c.json({ days: await openSlots("NAILS") });
 });
 
@@ -42,12 +43,12 @@ publicRoutes.post("/:token/join", async (c) => {
   if (!link || link.kind !== "referral") return jsonError(c, 404, "not_found", "הקישור לא פעיל");
   const body = z.object({ name: z.string().min(1), phone: z.string().min(1) }).parse(await c.req.json());
   const phone = normalizePhone(body.phone);
-  const contact = await prisma.contact.upsert({
-    where: { phone },
-    update: { referredById: link.contactId, source: "המלצה מלקוחה" },
-    create: { phone, name: body.name, source: "המלצה מלקוחה", referredById: link.contactId, salesStatus: "ליד חדש" },
+  const existing = await prisma.contact.findUnique({ where: { phone } });
+  if (existing) return jsonError(c, 422, "taken", "המספר כבר שמור אצל נועה");
+  const contact = await prisma.contact.create({
+    data: { phone, name: body.name, source: "המלצה מלקוחה", referredById: link.contactId, salesStatus: "ליד חדש" },
   });
-  await prisma.referral.create({ data: { referrerId: link.contactId, referredId: contact.id, via: "link" } }).catch(() => undefined);
+  await rememberReferral(link.contactId, contact.id);
   return c.json({ ok: true, contactId: contact.id });
 });
 
@@ -56,19 +57,17 @@ publicRoutes.post("/:token/book-friend", async (c) => {
   if (!link || link.kind !== "referral") return jsonError(c, 404, "not_found", "הקישור לא פעיל");
   const body = z.object({ name: z.string().min(1), phone: z.string().min(1), startsAt: z.string() }).parse(await c.req.json());
   const phone = normalizePhone(body.phone);
-  const contact = await prisma.contact.upsert({
-    where: { phone },
-    update: { referredById: link.contactId, source: "המלצה מלקוחה", name: body.name },
-    create: { phone, name: body.name, source: "המלצה מלקוחה", referredById: link.contactId, salesStatus: "נקבע תור אנושי" },
-  });
-  await prisma.referral.create({ data: { referrerId: link.contactId, referredId: contact.id, via: "link" } }).catch(() => undefined);
-  const service = await prisma.service.findFirstOrThrow({ where: { code: "NAILS" } });
   const startsAt = new Date(body.startsAt);
-  const endsAt = new Date(startsAt.getTime() + service.durationMin * 60000);
-  const clash = await prisma.appointment.findFirst({
-    where: { status: { not: "בוטל" }, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } },
+  if (Number.isNaN(startsAt.getTime())) return jsonError(c, 400, "invalid", "השעה לא תקינה");
+  if (!(await slotIsOpen("NAILS", startsAt))) return jsonError(c, 422, "taken", "השעה נתפסה");
+  const existing = await prisma.contact.findUnique({ where: { phone } });
+  if (existing) return jsonError(c, 422, "taken", "המספר כבר שמור אצל נועה");
+  const contact = await prisma.contact.create({
+    data: { phone, name: body.name, source: "המלצה מלקוחה", referredById: link.contactId, salesStatus: "נקבע תור אנושי" },
   });
-  if (clash) return jsonError(c, 422, "taken", "השעה נתפסה");
+  await rememberReferral(link.contactId, contact.id);
+  const service = await prisma.service.findFirstOrThrow({ where: { code: "NAILS" } });
+  const endsAt = new Date(startsAt.getTime() + service.durationMin * 60000);
   const appointment = await createAppointment({
     contactId: contact.id,
     serviceId: service.id,
@@ -83,14 +82,13 @@ publicRoutes.post("/:token/book-friend", async (c) => {
 publicRoutes.post("/:token/book", async (c) => {
   const link = await findLink(c.req.param("token"));
   if (!link || link.expired || link.kind !== "discount_booking") return jsonError(c, 404, "not_found", "ההטבה הסתיימה");
+  if (link.usedAt) return jsonError(c, 404, "not_found", "ההטבה כבר נוצלה");
   const body = z.object({ startsAt: z.string() }).parse(await c.req.json());
   const service = await prisma.service.findFirstOrThrow({ where: { code: "NAILS" } });
   const startsAt = new Date(body.startsAt);
+  if (Number.isNaN(startsAt.getTime())) return jsonError(c, 400, "invalid", "השעה לא תקינה");
+  if (!(await slotIsOpen("NAILS", startsAt))) return jsonError(c, 422, "taken", "השעה נתפסה");
   const endsAt = new Date(startsAt.getTime() + service.durationMin * 60000);
-  const clash = await prisma.appointment.findFirst({
-    where: { status: { not: "בוטל" }, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } },
-  });
-  if (clash) return jsonError(c, 422, "taken", "השעה נתפסה");
   const appointment = await createAppointment({
     contactId: link.contactId,
     serviceId: service.id,
@@ -115,3 +113,8 @@ publicRoutes.post("/:token/for-you", async (c) => {
   });
   return c.json({ ok: true });
 });
+
+async function rememberReferral(referrerId: string, referredId: string) {
+  const prior = await prisma.referral.findFirst({ where: { referrerId, referredId } });
+  if (!prior) await prisma.referral.create({ data: { referrerId, referredId, via: "link" } });
+}

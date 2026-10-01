@@ -168,7 +168,7 @@ export function BookingDialog({ startsAt, onClose, onBooked, existing, lockConta
           </div>
           )}
           {fixed ? null : fresh ? (
-            <div className="mt-3 space-y-2">
+            <div key="new-person" className="mt-3 space-y-2">
               <input name="name" required placeholder="שם" className="w-full rounded-md border border-lineStrong bg-white/80 px-3 py-2" />
               <input name="phone" required placeholder="טלפון" className="w-full rounded-md border border-lineStrong bg-white/80 px-3 py-2" />
               <select name="source" className="w-full rounded-md border border-lineStrong bg-white/80 px-3 py-2">
@@ -176,8 +176,8 @@ export function BookingDialog({ startsAt, onClose, onBooked, existing, lockConta
               </select>
             </div>
           ) : (
-            <div className="mt-3">
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש שם או טלפון" className="w-full rounded-md border border-lineStrong bg-white/80 px-3 py-2" />
+            <div key="find-person" className="mt-3">
+              <input value={query ?? ""} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש שם או טלפון" className="w-full rounded-md border border-lineStrong bg-white/80 px-3 py-2" />
               <div className="mt-2 max-h-40 space-y-1 overflow-y-auto overscroll-contain pe-1">
                 {shown.map((person) => (
                   <button type="button" key={person.id} onClick={() => setContactId(person.id)} className={`block w-full rounded-md px-3 py-1.5 text-right ${contactId === person.id ? "bg-brand text-onBrand" : "bg-white/70"}`}>

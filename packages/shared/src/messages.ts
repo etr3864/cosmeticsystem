@@ -22,7 +22,9 @@ export function firstName(fullName: string | null | undefined): string {
 
 export function renderTemplate(template: string, vars: Record<string, string>): string {
   const rendered = template.replace(/\{([^}]+)\}/g, (_, key: string) => vars[key] ?? "");
-  return rendered.replace(/^[\s,]+/, "").replace(/\s+/g, " ").trim();
+  const lines = rendered.split("\n").map((line) => line.replace(/[ \t]+/g, " ").trim());
+  if (lines[0]) lines[0] = lines[0].replace(/^,+/, "").trim();
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export function withFirstName(template: string, name: string, vars: Record<string, string>): string {

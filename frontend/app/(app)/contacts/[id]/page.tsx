@@ -50,9 +50,9 @@ export default function ContactPage({ params }: { params: Promise<{ id: string }
   }
 
   async function attend(id: string, status: "הגיעה" | "לא הגיעה") {
-    await api(`/appointments/${id}/attendance`, { method: "POST", body: JSON.stringify({ status, notes: visitNote, paymentMethod: status === "הגיעה" ? "מזומן" : undefined }) });
+    const saved = await api<{ messageQueued?: boolean }>(`/appointments/${id}/attendance`, { method: "POST", body: JSON.stringify({ status, notes: visitNote, paymentMethod: status === "הגיעה" ? "מזומן" : undefined }) });
     setVisitNote("");
-    pushToast(status === "הגיעה" ? "ההודעה נשלחה" : "נשמר");
+    pushToast(saved.messageQueued ? "ההודעה נשלחה" : "נשמר");
     await refresh(contact!.id);
   }
 

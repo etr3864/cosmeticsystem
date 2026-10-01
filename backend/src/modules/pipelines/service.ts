@@ -15,6 +15,11 @@ export async function addTimeline(contactId: string, type: string, actor: string
   await prisma.timelineEvent.create({ data: { contactId, type, actor, payload } });
 }
 
+export async function recomputeAllServices() {
+  const rows = await prisma.contactService.findMany({ select: { contactId: true, serviceId: true } });
+  for (const row of rows) await recomputeService(row.contactId, row.serviceId);
+}
+
 export async function recomputeService(contactId: string, serviceId: string) {
   const service = await prisma.service.findUniqueOrThrow({ where: { id: serviceId } });
   const arrived = await prisma.appointment.findMany({
@@ -75,24 +80,32 @@ export async function setSalesStatus(contactId: string, status: SalesStatus, act
   }
   const existing = await prisma.contact.findUnique({ where: { id: contactId } });
   if (!existing) throw new Error("not_found");
-  if (existing.salesStatus === status && (status !== "לא רלוונטית" || existing.notRelevantReason === (reason ?? null))) return existing;
+  if (existing.salesStatus === status && (status !== "לא רלוונטית" || existing.notRelevantReason === (reason ?? null))) {
+    return { contact: existing, messageQueued: false };
+  }
   const contact = await prisma.contact.update({
     where: { id: contactId },
     data: { salesStatus: status, notRelevantReason: status === "לא רלוונטית" ? reason : undefined },
   });
   await addTimeline(contactId, "status_change", actor, { status, reason: reason ?? null });
   if (status === "לקוחה פעילה") await ensureClientService(contactId);
+  let messageQueued = false;
   if (status === "אין מענה 3") {
-    const { enqueueAutomation } = await import("../automations/service.js");
-    await enqueueAutomation({
-      key: "no_answer_3",
-      contactId,
-      runAt: new Date(),
-      idempotencyKey: `no3:${contactId}:${Date.now()}`,
-      payload: {},
+    const prior = await prisma.scheduledJob.findFirst({
+      where: { contactId, idempotencyKey: { startsWith: `no3:${contactId}` }, status: { in: ["pending", "sent", "running"] } },
     });
+    if (!prior) {
+      const { enqueueAutomation } = await import("../automations/service.js");
+      messageQueued = await enqueueAutomation({
+        key: "no_answer_3",
+        contactId,
+        runAt: new Date(),
+        idempotencyKey: `no3:${contactId}`,
+        payload: {},
+      });
+    }
   }
-  return contact;
+  return { contact, messageQueued };
 }
 
 async function ensureClientService(contactId: string) {

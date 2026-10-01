@@ -164,6 +164,7 @@ contactRoutes.post("/:id/links/send", async (c) => {
     return c.json({ ...link, willSend: link.delivered });
   } catch (error) {
     if (error instanceof Error && error.message === "filled") return jsonError(c, 422, "taken", "כבר מילאו יחד");
+    if (error instanceof Error && error.message === "paused") return jsonError(c, 422, "paused", "השליחה כבויה בהגדרות");
     throw error;
   }
 });
@@ -182,6 +183,7 @@ contactRoutes.post("/:id/for-you", async (c) => {
     return c.json({ ...link, willSend: link.delivered });
   } catch (error) {
     if (error instanceof Error && error.message === "filled") return jsonError(c, 422, "taken", "כבר מילאו יחד");
+    if (error instanceof Error && error.message === "paused") return jsonError(c, 422, "paused", "השליחה כבויה בהגדרות");
     throw error;
   }
 });
@@ -222,7 +224,11 @@ contactRoutes.patch("/:id", async (c) => {
   }).parse(await c.req.json());
   const id = c.req.param("id");
   const actor = currentUser(c).username;
-  if (body.salesStatus) await setSalesStatus(id, body.salesStatus as "ליד חדש", actor, body.reason);
+  let messageQueued = false;
+  if (body.salesStatus) {
+    const saved = await setSalesStatus(id, body.salesStatus as "ליד חדש", actor, body.reason);
+    messageQueued = saved.messageQueued;
+  }
   if (body.opsStatus && body.serviceId) {
     const missing = leaveGuard(body.opsStatus, body.leftReason);
     if (missing) return jsonError(c, 422, "missing", "חסרה סיבת עזיבה", "leftReason");
@@ -273,7 +279,7 @@ contactRoutes.patch("/:id", async (c) => {
     if (Object.keys(fields).length) await prisma.contact.update({ where: { id }, data: fields });
     if (changes.length) await addTimeline(id, "field_change", actor, { changes });
   }
-  return c.json({ ok: true });
+  return c.json({ ok: true, messageQueued });
 });
 
 contactRoutes.post("/bulk", async (c) => {
@@ -306,8 +312,12 @@ contactRoutes.post("/bulk", async (c) => {
   const missing = salesTransitionMissing(body.salesStatus, body.reason);
   if (missing) return jsonError(c, 422, "missing", "חסרה סיבה", missing);
   const actor = currentUser(c).username;
-  for (const id of body.ids) await setSalesStatus(id, body.salesStatus, actor, body.reason);
-  return c.json({ done: body.ids.length, messages: body.salesStatus === "אין מענה 3" ? body.ids.length : 0 });
+  let messages = 0;
+  for (const id of body.ids) {
+    const saved = await setSalesStatus(id, body.salesStatus, actor, body.reason);
+    if (saved.messageQueued) messages += 1;
+  }
+  return c.json({ done: body.ids.length, messages });
 });
 
 async function importRows(rows: Record<string, string>[]) {
@@ -357,9 +367,14 @@ contactRoutes.get("/export/file", async (c) => {
 });
 
 contactRoutes.post("/:id/partner-link", async (c) => {
-  const link = await sendContactLink(c.req.param("id"), "referral");
-  await rememberLink(c.req.param("id"), currentUser(c).username, "referral", link.fresh ? "נוצר ונשלח" : "נשלח");
-  return c.json({ ...link, willSend: link.delivered });
+  try {
+    const link = await sendContactLink(c.req.param("id"), "referral");
+    await rememberLink(c.req.param("id"), currentUser(c).username, "referral", link.fresh ? "נוצר ונשלח" : "נשלח");
+    return c.json({ ...link, willSend: link.delivered });
+  } catch (error) {
+    if (error instanceof Error && error.message === "paused") return jsonError(c, 422, "paused", "השליחה כבויה בהגדרות");
+    throw error;
+  }
 });
 
 async function rememberLink(contactId: string, actor: string, kind: LinkKind, what: string) {

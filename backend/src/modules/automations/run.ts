@@ -1,94 +1,85 @@
 import { prisma } from "@noa/db";
-import { DISCOUNT_PERCENT, MESSAGE_DEFAULTS, priceAfterPercent } from "@noa/shared";
-import { deliverMessage } from "./service.js";
-import { ensureLink, markLinkSent } from "../links/service.js";
-import { hebrewDate } from "../../lib/time.js";
-import { setSalesStatus } from "../pipelines/service.js";
+import { nextSendAt } from "../../lib/send-window.js";
 import { markAttendance } from "../appointments/service.js";
+import { markLinkSent } from "../links/service.js";
+import { setSalesStatus } from "../pipelines/service.js";
+import { prepareJob } from "./prepare.js";
+import { deliverMessage } from "./service.js";
+
+const RETRY_MS = [60_000, 5 * 60_000, 30 * 60_000];
+let sweeping = false;
 
 export async function runDueJobs() {
-  const jobs = await prisma.scheduledJob.findMany({
-    where: { status: "pending", runAt: { lte: new Date() } },
-    include: { automation: true },
-    take: 30,
-    orderBy: { runAt: "asc" },
-  });
-  for (const job of jobs) {
-    try {
-      await runJob(job.id);
-    } catch (error) {
-      await prisma.scheduledJob.update({
-        where: { id: job.id },
-        data: { attempts: { increment: 1 }, lastError: error instanceof Error ? error.message : "failed", status: job.attempts >= 2 ? "failed" : "pending" },
+  if (sweeping) return { ran: 0 };
+  sweeping = true;
+  try {
+    const due = await prisma.scheduledJob.findMany({
+      where: { status: "pending", runAt: { lte: new Date() } },
+      include: { automation: true },
+      orderBy: { runAt: "asc" },
+      take: 30,
+    });
+    let ran = 0;
+    for (const job of due) {
+      const claimed = await prisma.scheduledJob.updateMany({
+        where: { id: job.id, status: "pending" },
+        data: { status: "running" },
       });
+      if (claimed.count !== 1) continue;
+      await runJob(job);
+      ran += 1;
     }
+    return { ran };
+  } finally {
+    sweeping = false;
   }
 }
 
-async function runJob(id: string) {
-  const job = await prisma.scheduledJob.findUniqueOrThrow({ where: { id }, include: { automation: true, contact: true } });
-  if (job.status !== "pending") return;
-  const payload = job.payload as { appointmentId?: string; serviceId?: string };
-  const vars = await buildVars(job.automation.key, job.contactId, job.contact.name, payload, job.automation.messageTemplate);
-  if (vars.skip) {
-    await prisma.scheduledJob.update({ where: { id }, data: { status: "cancelled" } });
+async function runJob(job: {
+  id: string;
+  contactId: string;
+  attempts: number;
+  payload: unknown;
+  automation: { key: string; active: boolean; messageTemplate: string };
+}) {
+  const payload = (job.payload ?? {}) as { appointmentId?: string; serviceId?: string };
+  if (!job.automation.active && job.automation.key !== "no_show") {
+    await prisma.scheduledJob.update({ where: { id: job.id }, data: { status: "cancelled" } });
     return;
   }
-  const sent = await deliverMessage(job.contactId, vars.template, vars.vars as Record<string, string>);
-  const linkId = "linkId" in vars ? vars.linkId : undefined;
-  if (sent.delivered && linkId) await markLinkSent(linkId);
-  await prisma.scheduledJob.update({ where: { id }, data: { status: "sent" } });
-  if (job.automation.key === "no_answer_3") {
-    await setSalesStatus(job.contactId, "לא רלוונטית", "automation", "שלושה ניסיונות בלי מענה");
+  try {
+    if (job.automation.key === "no_show" && payload.appointmentId) await markBookedAsMissed(payload.appointmentId);
+    if (!job.automation.active) {
+      await prisma.scheduledJob.update({ where: { id: job.id }, data: { status: "cancelled" } });
+      return;
+    }
+    const open = nextSendAt(new Date());
+    if (open.getTime() > Date.now() + 15_000) {
+      await prisma.scheduledJob.update({ where: { id: job.id }, data: { status: "pending", runAt: open } });
+      return;
+    }
+    const prepared = await prepareJob(job.automation.key, job.contactId, payload, job.automation.messageTemplate);
+    if (prepared.skip) {
+      await prisma.scheduledJob.update({ where: { id: job.id }, data: { status: "cancelled" } });
+      return;
+    }
+    const result = await deliverMessage(job.contactId, prepared.template ?? job.automation.messageTemplate, prepared.vars ?? {}, prepared.facts ?? {});
+    if (result.delivered && prepared.linkId) await markLinkSent(prepared.linkId);
+    await prisma.scheduledJob.update({ where: { id: job.id }, data: { status: "sent" } });
+    if (job.automation.key === "no_answer_3") await setSalesStatus(job.contactId, "לא רלוונטית", "המערכת", "שלושה ניסיונות בלי מענה");
+  } catch (error) {
+    const attempts = job.attempts + 1;
+    const wait = RETRY_MS[Math.min(job.attempts, RETRY_MS.length - 1)] ?? 30 * 60_000;
+    await prisma.scheduledJob.update({
+      where: { id: job.id },
+      data: attempts >= 3
+        ? { status: "failed", attempts, lastError: error instanceof Error ? error.message : "send failed" }
+        : { status: "pending", attempts, runAt: new Date(Date.now() + wait), lastError: error instanceof Error ? error.message : "send failed" },
+    });
   }
 }
 
-async function buildVars(key: string, contactId: string, name: string, payload: { appointmentId?: string; serviceId?: string }, template: string) {
-  if (key === "beshvilech" && payload.serviceId) {
-    if (payload.appointmentId) {
-      const linked = await prisma.appointment.findUnique({ where: { id: payload.appointmentId } });
-      if (!linked || linked.status === "בוטל") {
-        const other = await prisma.appointment.findFirst({
-          where: { contactId, serviceId: payload.serviceId, status: "נקבע", startsAt: { gt: new Date() } },
-        });
-        if (!other) return { skip: true, vars: {}, template };
-      }
-    }
-    const filled = await prisma.questionnaireResponse.findUnique({
-      where: { contactId_serviceId: { contactId, serviceId: payload.serviceId } },
-    });
-    if (filled) return { skip: true, vars: {}, template };
-    const link = await ensureLink(contactId, "questionnaire");
-    return { skip: false, template, vars: { שם: name, קישור: link.url }, linkId: link.id };
-  }
-  if (key === "discount" && payload.serviceId) {
-    const service = await prisma.service.findUniqueOrThrow({ where: { id: payload.serviceId } });
-    const future = await prisma.appointment.count({
-      where: { contactId, status: "נקבע", startsAt: { gt: new Date() }, id: payload.appointmentId ? { not: payload.appointmentId } : undefined },
-    });
-    const link = await ensureLink(contactId, "discount_booking");
-    const chosen = future > 0 ? MESSAGE_DEFAULTS.discountExisting : template;
-    return {
-      skip: false,
-      template: chosen,
-      linkId: link.id,
-      vars: {
-        שם: name,
-        קישור: link.url,
-        מחיר: String(service.price),
-        מחיר_אחרי: String(priceAfterPercent(service.price, DISCOUNT_PERCENT)),
-      },
-    };
-  }
-  if (key === "no_show" && payload.appointmentId) {
-    const appointment = await prisma.appointment.findUnique({ where: { id: payload.appointmentId } });
-    if (!appointment || (appointment.status !== "נקבע" && appointment.status !== "לא הגיעה")) return { skip: true, vars: {}, template };
-    if (appointment.status === "נקבע") await markAttendance({ appointmentId: appointment.id, status: "לא הגיעה", actor: "automation" });
-    return { skip: false, template, vars: { שם: name, תאריך: hebrewDate(appointment.startsAt) } };
-  }
-  if (key === "became_regular" || key === "partner_link") {
-    const link = await ensureLink(contactId, "referral");
-    return { skip: false, template, vars: { שם: name, קישור: link.url }, linkId: link.id };
-  }
-  return { skip: false, template, vars: { שם: name } };
+async function markBookedAsMissed(appointmentId: string) {
+  const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } });
+  if (appointment?.status === "נקבע") await markAttendance({ appointmentId, status: "לא הגיעה", actor: "automation" });
 }

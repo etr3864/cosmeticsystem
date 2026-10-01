@@ -1,7 +1,32 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@noa/db";
 import { calculatePrice, DISCOUNT_PERCENT } from "@noa/shared";
 import { enqueueAutomation } from "../automations/service.js";
 import { addTimeline, becomeClient, recomputeService, setSalesStatus } from "../pipelines/service.js";
+
+function overlap(startsAt: Date, endsAt: Date, ignoreId?: string) {
+  return {
+    ...(ignoreId ? { id: { not: ignoreId } } : {}),
+    status: { not: "בוטל" as const },
+    startsAt: { lt: endsAt },
+    endsAt: { gt: startsAt },
+  };
+}
+
+function withCalendarLock<T>(work: (tx: Prisma.TransactionClient) => Promise<T>) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(8421701)`;
+    return work(tx);
+  });
+}
+
+export function placeAppointment(id: string, startsAt: Date, endsAt: Date, data: Prisma.AppointmentUpdateInput) {
+  return withCalendarLock(async (tx) => {
+    const clash = await tx.appointment.findFirst({ where: overlap(startsAt, endsAt, id) });
+    if (clash) throw new Error("taken");
+    return tx.appointment.update({ where: { id }, data: { ...data, startsAt, endsAt } });
+  });
+}
 
 export async function createAppointment(input: {
   contactId: string;
@@ -17,19 +42,23 @@ export async function createAppointment(input: {
   const service = await prisma.service.findUniqueOrThrow({ where: { id: input.serviceId } });
   const discounts = [input.discountPct ?? 0, input.motherDaughter ? 10 : 0].filter((value) => value > 0);
   const price = calculatePrice(service.price, discounts, []);
-  const appointment = await prisma.appointment.create({
-    data: {
-      contactId: input.contactId,
-      serviceId: input.serviceId,
-      startsAt: input.startsAt,
-      endsAt: input.endsAt,
-      bookedBy: input.bookedBy,
-      listPrice: service.price,
-      discountPct: price.discountPct,
-      finalPrice: price.finalPrice,
-      motherDaughter: Boolean(input.motherDaughter),
-      notes: input.notes?.trim() || null,
-    },
+  const appointment = await withCalendarLock(async (tx) => {
+    const clash = await tx.appointment.findFirst({ where: overlap(input.startsAt, input.endsAt) });
+    if (clash) throw new Error("taken");
+    return tx.appointment.create({
+      data: {
+        contactId: input.contactId,
+        serviceId: input.serviceId,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+        bookedBy: input.bookedBy,
+        listPrice: service.price,
+        discountPct: Math.round(price.discountPct),
+        finalPrice: Math.round(price.finalPrice),
+        motherDaughter: Boolean(input.motherDaughter),
+        notes: input.notes?.trim() || null,
+      },
+    });
   });
   await addTimeline(input.contactId, "appointment", input.actor ?? "user", { appointmentId: appointment.id, startsAt: input.startsAt });
   await enqueueAutomation({
@@ -100,7 +129,7 @@ export async function markAttendance(input: {
       amountPaid: collected,
       completionsCount: input.completionsCount ?? null,
       notes: input.notes ?? appointment.notes,
-      finalPrice: input.status === "הגיעה" ? collected : appointment.finalPrice,
+      finalPrice: collected ?? appointment.finalPrice,
     },
   });
   if (input.notes) await addTimeline(appointment.contactId, "note", input.actor, { appointmentId: appointment.id, text: input.notes });
@@ -140,8 +169,9 @@ export async function markAttendance(input: {
       data: { status: "cancelled" },
     });
   }
+  let messageQueued = false;
   if (firstArrival) {
-    await enqueueAutomation({
+    messageQueued = await enqueueAutomation({
       key: "discount",
       contactId: appointment.contactId,
       runAt: new Date(),
@@ -149,29 +179,35 @@ export async function markAttendance(input: {
       payload: { appointmentId: appointment.id, serviceId: appointment.serviceId },
     });
   }
-  return prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id }, include: { service: true, contact: true } });
+  const saved = await prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id }, include: { service: true, contact: true } });
+  return { ...saved, messageQueued };
 }
 
 async function applyCredits(contactId: string, appointmentId: string, listPrice: number, discountPct: number, completions: number) {
-  const credits = await prisma.credit.findMany({
-    where: { contactId, expiresAt: { gt: new Date() }, remainingPct: { gt: 0 } },
-    orderBy: { expiresAt: "asc" },
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${appointmentId}))`;
+    const already = await tx.creditRedemption.findFirst({ where: { appointmentId } });
+    if (already) return calculatePrice(listPrice, [discountPct], [], completions);
+    const credits = await tx.credit.findMany({
+      where: { contactId, expiresAt: { gt: new Date() }, remainingPct: { gt: 0 } },
+      orderBy: { expiresAt: "asc" },
+    });
+    let room = Math.max(0, 50 - discountPct);
+    const takes: { id: string; take: number }[] = [];
+    for (const credit of credits) {
+      if (room <= 0) break;
+      const take = Math.min(room, credit.remainingPct);
+      if (take <= 0) continue;
+      takes.push({ id: credit.id, take });
+      room -= take;
+    }
+    const price = calculatePrice(listPrice, [discountPct], takes.map((item) => item.take), completions);
+    for (const used of takes) {
+      await tx.credit.update({ where: { id: used.id }, data: { remainingPct: { decrement: used.take } } });
+      await tx.creditRedemption.create({ data: { creditId: used.id, appointmentId, percentUsed: used.take } });
+    }
+    return price;
   });
-  let room = Math.max(0, 50 - discountPct);
-  const takes: { id: string; take: number }[] = [];
-  for (const credit of credits) {
-    if (room <= 0) break;
-    const take = Math.min(room, credit.remainingPct);
-    if (take <= 0) continue;
-    takes.push({ id: credit.id, take });
-    room -= take;
-  }
-  const price = calculatePrice(listPrice, [discountPct], takes.map((item) => item.take), completions);
-  for (const used of takes) {
-    await prisma.credit.update({ where: { id: used.id }, data: { remainingPct: { decrement: used.take } } });
-    await prisma.creditRedemption.create({ data: { creditId: used.id, appointmentId, percentUsed: used.take } });
-  }
-  return price;
 }
 
 export { DISCOUNT_PERCENT };

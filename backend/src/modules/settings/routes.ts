@@ -1,27 +1,31 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { prisma } from "@noa/db";
-import { calculatePrice, canSeeTechnical } from "@noa/shared";
+import { calculatePrice, canSeeTechnical, canWriteBusiness } from "@noa/shared";
 import { requireUser, currentUser } from "../../http/session.js";
 import { jsonError } from "../../http/errors.js";
-import { encrypt } from "../../lib/crypto.js";
+import { decrypt, encrypt, randomToken, sha256 } from "../../lib/crypto.js";
 
 export const settingsRoutes = new Hono();
 settingsRoutes.use("*", requireUser);
 
 settingsRoutes.get("/", async (c) => {
-  const [settings, services, automations, campaigns] = await Promise.all([
+  const technical = canSeeTechnical(currentUser(c).role);
+  const [settings, services, automations, campaigns, secret] = await Promise.all([
     prisma.setting.findMany(),
     prisma.service.findMany({ orderBy: { name: "asc" } }),
     prisma.automation.findMany({ orderBy: { key: "asc" } }),
     prisma.campaign.findMany({ include: { spend: true } }),
+    prisma.secret.findUnique({ where: { key: "optive_api_key" } }),
   ]);
   return c.json({
     settings: Object.fromEntries(settings.map((item) => [item.key, item.value])),
     services,
     automations,
     campaigns,
-    technical: canSeeTechnical(currentUser(c).role),
+    technical,
+    optiveHint: secret ? decrypt(secret.ciphertext).slice(-4) : null,
+    apiBase: `${(process.env.FRONTEND_URL ?? "http://localhost:3000").replace(/\/$/, "")}/backend`,
   });
 });
 
@@ -82,7 +86,9 @@ settingsRoutes.put("/budget", async (c) => {
       ?? await prisma.campaign.create({ data: { name: "שיווק" } });
     await prisma.campaignSpend.create({ data: { campaignId: campaign.id, month: body.month, amount: body.amount } });
   } else {
-    await prisma.campaignSpend.update({ where: { id: existing[0].id }, data: { amount: body.amount } });
+    const current = existing[0];
+    if (!current) return jsonError(c, 404, "not_found", "התקציב לא נמצא");
+    await prisma.campaignSpend.update({ where: { id: current.id }, data: { amount: body.amount } });
     if (existing.length > 1) await prisma.campaignSpend.deleteMany({ where: { id: { in: existing.slice(1).map((row) => row.id) } } });
   }
   const campaigns = await prisma.campaign.findMany({ include: { spend: true }, orderBy: { name: "asc" } });
@@ -99,10 +105,54 @@ settingsRoutes.post("/campaigns/:id/spend", async (c) => {
   return c.json(spend);
 });
 
+settingsRoutes.post("/optive/test", async (c) => {
+  if (!canWriteBusiness(currentUser(c).role)) return jsonError(c, 401, "forbidden", "אין הרשאה");
+  const secret = await prisma.secret.findUnique({ where: { key: "optive_api_key" } });
+  if (!secret) return jsonError(c, 422, "missing", "עוד אין מפתח");
+  const response = await fetch("https://api.0ptive.com/api/external/triggers/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-Key": decrypt(secret.ciphertext) },
+    body: "{}",
+  });
+  if (response.status === 401 || response.status === 403) return jsonError(c, 422, "invalid", "המפתח לא התקבל");
+  return c.json({ ok: true });
+});
+
 settingsRoutes.put("/secret", async (c) => {
-  if (!canSeeTechnical(currentUser(c).role)) return jsonError(c, 401, "forbidden", "אין הרשאה");
   const body = z.object({ key: z.string(), value: z.string() }).parse(await c.req.json());
+  const allowed = body.key === "optive_api_key" ? canWriteBusiness(currentUser(c).role) : canSeeTechnical(currentUser(c).role);
+  if (!allowed) return jsonError(c, 401, "forbidden", "אין הרשאה");
   await prisma.secret.upsert({ where: { key: body.key }, update: { ciphertext: encrypt(body.value) }, create: { key: body.key, ciphertext: encrypt(body.value) } });
+  return c.json({ ok: true });
+});
+
+settingsRoutes.get("/tokens", async (c) => {
+  if (!canWriteBusiness(currentUser(c).role)) return jsonError(c, 401, "forbidden", "אין הרשאה");
+  const tokens = await prisma.apiToken.findMany({
+    orderBy: { createdAt: "desc" },
+    select: { id: true, name: true, active: true, lastUsedAt: true, createdAt: true },
+  });
+  return c.json({ tokens });
+});
+
+settingsRoutes.post("/tokens", async (c) => {
+  if (!canWriteBusiness(currentUser(c).role)) return jsonError(c, 401, "forbidden", "אין הרשאה");
+  const body = z.object({ name: z.string().trim().min(1).max(80) }).parse(await c.req.json());
+  const token = randomToken();
+  const row = await prisma.apiToken.create({ data: { name: body.name, tokenHash: sha256(token) } });
+  return c.json({ id: row.id, name: row.name, token, createdAt: row.createdAt });
+});
+
+settingsRoutes.patch("/tokens/:id", async (c) => {
+  if (!canWriteBusiness(currentUser(c).role)) return jsonError(c, 401, "forbidden", "אין הרשאה");
+  const body = z.object({ active: z.boolean() }).parse(await c.req.json());
+  const row = await prisma.apiToken.update({ where: { id: c.req.param("id") }, data: { active: body.active } });
+  return c.json({ id: row.id, active: row.active });
+});
+
+settingsRoutes.delete("/tokens/:id", async (c) => {
+  if (!canWriteBusiness(currentUser(c).role)) return jsonError(c, 401, "forbidden", "אין הרשאה");
+  await prisma.apiToken.delete({ where: { id: c.req.param("id") } });
   return c.json({ ok: true });
 });
 

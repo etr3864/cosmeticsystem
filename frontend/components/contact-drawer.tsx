@@ -93,9 +93,12 @@ export function ContactDrawer({ id, kind, onClose, onChanged }: { id: string; ki
       pushToast("חסרה סיבה");
       return;
     }
-    if (mode === "lead") await api(`/contacts/${person.id}`, { method: "PATCH", body: JSON.stringify({ salesStatus: next, reason }) });
-    else if (person.services[0]) await api(`/contacts/${person.id}`, { method: "PATCH", body: JSON.stringify({ opsStatus: next, serviceId: person.services[0].serviceId, leftReason: reason }) });
-    pushToast(next === "אין מענה 3" ? "ההודעה נשלחה" : "נשמר");
+    const saved = mode === "lead"
+      ? await api<{ messageQueued?: boolean }>(`/contacts/${person.id}`, { method: "PATCH", body: JSON.stringify({ salesStatus: next, reason }) })
+      : person.services[0]
+        ? await api<{ messageQueued?: boolean }>(`/contacts/${person.id}`, { method: "PATCH", body: JSON.stringify({ opsStatus: next, serviceId: person.services[0].serviceId, leftReason: reason }) })
+        : null;
+    pushToast(saved?.messageQueued ? "ההודעה נשלחה" : "נשמר");
     await load();
   }
 
@@ -184,11 +187,11 @@ export function ContactDrawer({ id, kind, onClose, onChanged }: { id: string; ki
       pushToast("סכום לא תקין");
       return;
     }
-    await api(`/appointments/${appointmentId}/attendance`, { method: "POST", body: JSON.stringify({ status, notes: visitNote, paymentMethod: status === "הגיעה" ? pay : undefined, ...(amount != null ? { amountPaid: amount } : {}) }) });
+    const saved = await api<{ messageQueued?: boolean }>(`/appointments/${appointmentId}/attendance`, { method: "POST", body: JSON.stringify({ status, notes: visitNote, paymentMethod: status === "הגיעה" ? pay : undefined, ...(amount != null ? { amountPaid: amount } : {}) }) });
     setEditingId(null);
     setVisitNote("");
     if (status === "הגיעה" && !isClient) pushToast("עברה ללקוחות");
-    else pushToast(status === "הגיעה" ? "ההודעה נשלחה" : "נשמר");
+    else pushToast(saved.messageQueued ? "ההודעה נשלחה" : "נשמר");
     await load();
     onChanged?.();
   }

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, ChevronDown, Clock, Coins, MessageSquare, Wallet } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronDown, Clock, Coins, MessageSquare, Wallet } from "lucide-react";
 import { api } from "@/lib/api";
 import { pushToast } from "@/components/toast";
+import { SettingsApiGuide } from "@/components/settings-api-guide";
 
 const days = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 const templates: Record<string, { title: string; when: string }> = {
@@ -21,6 +22,7 @@ const tabs = [
   { id: "budget", label: "תקציב", hint: "הוצאה שיווקית לפי חודש", icon: Wallet },
   { id: "messages", label: "הודעות", hint: "הטקסטים שנשלחים", icon: MessageSquare },
   { id: "calendar", label: "יומן גוגל", hint: "כותרות לבדיקה", icon: CalendarDays },
+  { id: "guide", label: "מדריכים", hint: "טוקן וה־API לשירה", icon: BookOpen },
 ] as const;
 
 type Tab = (typeof tabs)[number]["id"];
@@ -30,6 +32,9 @@ type Settings = {
   automations: { key: string; messageTemplate: string; active: boolean }[];
   services: { id: string; name: string; price: number; durationMin: number }[];
   campaigns: { id: string; name: string; spend: { month: string; amount: number }[] }[];
+  technical?: boolean;
+  optiveHint?: string | null;
+  apiBase?: string;
 };
 
 export default function SettingsPage() {
@@ -174,20 +179,37 @@ export default function SettingsPage() {
                 {tab === "messages" ? (
                   <>
                     <h2 className="text-2xl">הודעות</h2>
-                    <p className="mt-1 text-muted">שינוי חל רק על הודעות שעוד לא נקבעו לשליחה.</p>
+                    <p className="mt-1 text-muted">מתג כבוי עוצר את השליחה, גם להודעה שכבר נקבעה. שינוי ניסוח חל על הודעות שעוד לא יצאו.</p>
+                    <OptiveKey hint={data.optiveHint ?? null} onSaved={(optiveHint) => setData((current) => current && { ...current, optiveHint })} />
                     <div className="mt-4 space-y-2">
                       {data.automations.map((item, index) => {
                         const meta = templates[item.key] ?? { title: item.key, when: "" };
                         const open = openMessage === item.key;
                         return (
                           <article key={item.key} className="settings-row overflow-hidden rounded-xl border border-line bg-white/80" style={{ animationDelay: `${index * 40}ms` }}>
-                            <button type="button" onClick={() => setOpenMessage(open ? null : item.key)} className="settings-still flex w-full items-center justify-between gap-3 px-4 py-3 text-right hover:bg-white">
-                              <span>
-                                <span className="block text-lg">{meta.title}</span>
-                                <span className="mt-0.5 block text-sm text-muted">{meta.when}</span>
-                              </span>
-                              <ChevronDown size={18} className={`shrink-0 text-goldInk transition ${open ? "rotate-180" : ""}`} />
-                            </button>
+                            <div className="flex items-center gap-3 px-4 py-3">
+                              <button type="button" onClick={() => setOpenMessage(open ? null : item.key)} className="settings-still flex min-w-0 flex-1 items-center justify-between gap-3 text-right hover:opacity-80">
+                                <span className="min-w-0">
+                                  <span className={`block text-lg ${item.active ? "" : "text-muted"}`}>{meta.title}</span>
+                                  <span className="mt-0.5 block text-sm text-muted">{meta.when}</span>
+                                </span>
+                                <ChevronDown size={18} className={`shrink-0 text-goldInk transition ${open ? "rotate-180" : ""}`} />
+                              </button>
+                              <SendSwitch
+                                on={item.active}
+                                label={meta.title}
+                                onToggle={() => {
+                                  const active = !item.active;
+                                  setData((current) => current && { ...current, automations: current.automations.map((row) => row.key === item.key ? { ...row, active } : row) });
+                                  api(`/settings/automations/${item.key}`, { method: "PUT", body: JSON.stringify({ active }) }).then(() => {
+                                    pushToast(active ? "השליחה דולקת" : "השליחה כבויה");
+                                  }).catch((error: Error) => {
+                                    setData((current) => current && { ...current, automations: current.automations.map((row) => row.key === item.key ? { ...row, active: item.active } : row) });
+                                    pushToast(error.message);
+                                  });
+                                }}
+                              />
+                            </div>
                             {open ? (
                               <div className="border-t border-line px-4 py-3">
                                 <textarea
@@ -224,6 +246,7 @@ export default function SettingsPage() {
                     }} className="mt-3 rounded-full bg-brand px-5 py-2 text-onBrand">שליחה לבדיקה</button>
                   </>
                 ) : null}
+                {tab === "guide" ? <SettingsApiGuide apiBase={data.apiBase ?? "http://localhost:3000/backend"} /> : null}
               </div>
             )}
           </div>
@@ -403,4 +426,77 @@ function ClockPart({ label, value, max, onCommit }: { label: string; value: numb
 
 function pad(value: number) {
   return String(value).padStart(2, "0");
+}
+
+function SendSwitch({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      dir="ltr"
+      aria-checked={on}
+      aria-label={`${label}, ${on ? "דולק" : "כבוי"}`}
+      onClick={onToggle}
+      className="settings-still flex shrink-0 items-center gap-2"
+    >
+      <span className={`w-8 text-xs font-bold ${on ? "text-goldInk" : "text-faint"}`}>{on ? "דולק" : "כבוי"}</span>
+      <span className={`relative h-8 w-14 rounded-full border transition duration-200 ${on ? "border-brand bg-brand" : "border-lineStrong bg-white"}`}>
+        <span className={`absolute top-1 h-6 w-6 rounded-full shadow-sm transition duration-200 ${on ? "left-7 bg-[#F1C968]" : "left-1 bg-[#D6C6B3]"}`} />
+      </span>
+    </button>
+  );
+}
+
+function OptiveKey({ hint, onSaved }: { hint: string | null; onSaved: (hint: string) => void }) {
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <form
+      className="mt-4 rounded-xl border border-line bg-white/80 p-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const next = value.trim();
+        if (!next) return;
+        setBusy(true);
+        api("/settings/secret", { method: "PUT", body: JSON.stringify({ key: "optive_api_key", value: next }) })
+          .then(() => {
+            onSaved(next.slice(-4));
+            setValue("");
+            pushToast("נשמר");
+          })
+          .catch((error: Error) => pushToast(error.message))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <h3 className="text-lg">מפתח השליחה</h3>
+      <p className="mt-1 text-sm text-muted">המפתח של אופטיב. איתו ההודעות יוצאות מהמספר של שירה.</p>
+      <p className="mt-3 text-sm">{hint ? `שמור, מסתיים ב־${hint}` : "עוד אין מפתח."}</p>
+      <label className="mt-3 block text-sm text-muted">מפתח חדש
+        <input
+          type="password"
+          autoComplete="off"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          placeholder="מדביקים כאן"
+          className="mt-1 w-full rounded-md border border-lineStrong bg-white px-3 py-2 text-ink"
+        />
+      </label>
+      <div className="mt-3 flex gap-2">
+        <button type="submit" disabled={busy || !value.trim()} className="rounded-full bg-brand px-5 py-2 text-onBrand">שמירה</button>
+        <button
+          type="button"
+          disabled={busy || !hint}
+          onClick={() => {
+            setBusy(true);
+            api("/settings/optive/test", { method: "POST" })
+              .then(() => pushToast("החיבור תקין"))
+              .catch((error: Error) => pushToast(error.message))
+              .finally(() => setBusy(false));
+          }}
+          className="rounded-full bg-white px-5 py-2"
+        >בדיקת חיבור</button>
+      </div>
+    </form>
+  );
 }

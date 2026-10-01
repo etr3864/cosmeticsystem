@@ -93,14 +93,18 @@ export function RecordTable({ kind }: { kind: "lead" | "client" }) {
       pushToast("נקבע תור נעשה מתוך השורה, כדי לקבוע את התור");
       return;
     }
-    if (next === "אין מענה 3" && !window.confirm(`יישלחו ${selected.length} הודעות.`)) return;
-    await api("/contacts/bulk", {
+    if (next === "אין מענה 3") {
+      const settings = await api<{ automations: { key: string; active: boolean }[] }>("/settings");
+      const sends = settings.automations.find((item) => item.key === "no_answer_3")?.active;
+      if (sends && !window.confirm(`יישלחו ${selected.length} הודעות.`)) return;
+    }
+    const saved = await api<{ messages?: number }>("/contacts/bulk", {
       method: "POST",
       body: JSON.stringify(next === "עזבה" ? { ids: selected, opsStatus: "עזבה", leftReason: reason } : { ids: selected, salesStatus: next, reason }),
     });
     setSelected([]);
     if (ask) askDismiss.requestClose();
-    pushToast(next === "אין מענה 3" ? "ההודעה נשלחה" : "נשמר");
+    pushToast(saved.messages ? "ההודעה נשלחה" : "נשמר");
     load();
   }
 
@@ -132,14 +136,14 @@ export function RecordTable({ kind }: { kind: "lead" | "client" }) {
       load();
       return;
     }
-    if (kind === "lead") {
-      await api(`/contacts/${row.id}`, { method: "PATCH", body: JSON.stringify({ salesStatus: next, reason }) });
-    } else if (row.services[0]) {
-      await api(`/contacts/${row.id}`, { method: "PATCH", body: JSON.stringify({ opsStatus: next, serviceId: row.services[0].serviceId, leftReason: reason }) });
-    }
+    const saved = kind === "lead"
+      ? await api<{ messageQueued?: boolean }>(`/contacts/${row.id}`, { method: "PATCH", body: JSON.stringify({ salesStatus: next, reason }) })
+      : row.services[0]
+        ? await api<{ messageQueued?: boolean }>(`/contacts/${row.id}`, { method: "PATCH", body: JSON.stringify({ opsStatus: next, serviceId: row.services[0].serviceId, leftReason: reason }) })
+        : null;
     if (ask) askDismiss.requestClose();
     else { setReason(""); setPendingId(null); }
-    pushToast(next === "אין מענה 3" ? "ההודעה נשלחה" : "נשמר");
+    pushToast(saved?.messageQueued ? "ההודעה נשלחה" : "נשמר");
     load();
   }
 

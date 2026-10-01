@@ -12,4 +12,8 @@ describe("messages", () => {
     expect(withFirstName("{שם}, עוד מעט", "רחל כהן", {})).toBe("רחל, עוד מעט");
     expect(withFirstName("{שם}, עוד מעט", "", {})).toBe("עוד מעט");
   });
+
+  it("keeps line breaks in a message", () => {
+    expect(withFirstName("{שם},\nשורה שניה", "רחל", {})).toBe("רחל,\nשורה שניה");
+  });
 });

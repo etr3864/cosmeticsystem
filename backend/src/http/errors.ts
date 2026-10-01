@@ -10,7 +10,8 @@ export function handleError(error: unknown, c: Context) {
   if (error instanceof PhoneInvalidError) return jsonError(c, 400, "invalid_phone", error.message, "phone");
   if (error instanceof ZodError) {
     const issue = error.issues[0];
-    return jsonError(c, 400, "invalid", "חסר או לא תקין", issue?.path.join("."));
+    const field = issue?.code === "unrecognized_keys" ? issue.keys[0] : issue?.path.join(".");
+    return jsonError(c, 400, "invalid", "חסר או לא תקין", field || undefined);
   }
   if (error instanceof Error && error.message === "missing") return jsonError(c, 422, "missing", "חסרה סיבה");
   if (error instanceof Error && error.message === "not_found") return jsonError(c, 404, "not_found", "לא נמצא");
