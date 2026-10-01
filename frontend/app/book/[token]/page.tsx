@@ -44,10 +44,10 @@ function OfferClock({ until, onDone }: { until: string; onDone: () => void }) {
   return (
     <div className="guest-card mt-6 px-5 py-5 text-center">
       <p className="text-sm font-bold text-goldInk">ההנחה נסגרת בעוד</p>
-      <div className="mt-3 flex justify-center gap-3">
+      <div dir="ltr" className="mt-3 flex justify-center gap-3">
         {parts.map((part) => (
           <div key={part.label} className="min-w-16 rounded-2xl bg-sunken px-3 py-2">
-            <p className="text-[32px] font-extrabold leading-none tabular-nums text-ink">{String(part.value).padStart(2, "0")}</p>
+            <p dir="ltr" className="text-[32px] font-extrabold leading-none tabular-nums text-ink">{String(part.value).padStart(2, "0")}</p>
             <p className="mt-1 text-xs text-faint">{part.label}</p>
           </div>
         ))}
