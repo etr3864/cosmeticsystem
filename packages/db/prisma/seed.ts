@@ -14,18 +14,23 @@ const nailsQuestions = [
 ];
 
 async function main() {
-  const eitanPassword = process.env.SEED_EITAN_PASSWORD ?? "eitan-dev";
-  const noaPassword = process.env.SEED_NOA_PASSWORD ?? "noa-dev";
+  const eitanPassword = process.env.SEED_EITAN_PASSWORD;
+  const noaPassword = process.env.SEED_NOA_PASSWORD;
+  if (process.env.NODE_ENV === "production" && (!eitanPassword || !noaPassword)) {
+    throw new Error("SEED_EITAN_PASSWORD and SEED_NOA_PASSWORD are required");
+  }
+  const eitan = eitanPassword ?? "eitan-dev";
+  const noa = noaPassword ?? "noa-dev";
 
   await prisma.user.upsert({
     where: { username: "eitan" },
     update: {},
-    create: { username: "eitan", role: "super_admin", passwordHash: await argon2.hash(eitanPassword), phone: null },
+    create: { username: "eitan", role: "super_admin", passwordHash: await argon2.hash(eitan), phone: null },
   });
   await prisma.user.upsert({
     where: { username: "noa" },
     update: {},
-    create: { username: "noa", role: "owner", passwordHash: await argon2.hash(noaPassword), phone: null },
+    create: { username: "noa", role: "owner", passwordHash: await argon2.hash(noa), phone: null },
   });
 
   const nails = await prisma.service.upsert({
