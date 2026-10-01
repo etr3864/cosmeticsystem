@@ -9,10 +9,9 @@ type TokenRow = { id: string; name: string; active: boolean; lastUsedAt: string 
 
 function guideBase(apiBase: string) {
   const saved = apiBase.replace(/\/$/, "");
+  if (saved.startsWith("https://")) return saved;
   if (typeof window === "undefined") return saved;
-  const here = `${window.location.origin}/backend`;
-  const local = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-  return local ? saved : here;
+  return `${window.location.origin}/backend`;
 }
 
 export function SettingsApiGuide({ apiBase }: { apiBase: string }) {
