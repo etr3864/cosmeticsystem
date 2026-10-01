@@ -7,7 +7,16 @@ import { externalApiBlocks, externalApiGuideMarkdown } from "@/lib/external-api-
 
 type TokenRow = { id: string; name: string; active: boolean; lastUsedAt: string | null; createdAt: string };
 
+function guideBase(apiBase: string) {
+  const saved = apiBase.replace(/\/$/, "");
+  if (typeof window === "undefined") return saved;
+  const here = `${window.location.origin}/backend`;
+  const local = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  return local ? saved : here;
+}
+
 export function SettingsApiGuide({ apiBase }: { apiBase: string }) {
+  const base = guideBase(apiBase);
   const [tokens, setTokens] = useState<TokenRow[] | null>(null);
   const [name, setName] = useState("");
   const [fresh, setFresh] = useState<string | null>(null);
@@ -33,7 +42,7 @@ export function SettingsApiGuide({ apiBase }: { apiBase: string }) {
   }
 
   function download() {
-    const blob = new Blob([externalApiGuideMarkdown(apiBase)], { type: "text/markdown;charset=utf-8" });
+    const blob = new Blob([externalApiGuideMarkdown(base)], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -107,7 +116,7 @@ export function SettingsApiGuide({ apiBase }: { apiBase: string }) {
           <button type="button" onClick={download} className="rounded-full bg-white px-5 py-2">ייצוא Markdown</button>
         </div>
         <article className="mt-4 space-y-3 text-sm leading-6 text-ink">
-          {externalApiBlocks(apiBase).map((block, index) => {
+          {externalApiBlocks(base).map((block, index) => {
             if (block.kind === "h2") return <h3 key={index} className="pt-2 text-lg">{block.text}</h3>;
             if (block.kind === "p") return <p key={index} className="text-muted">{block.text}</p>;
             if (block.kind === "list") return <ul key={index} className="list-disc space-y-1 pe-5 text-muted">{block.items.map((item) => <li key={item}>{item}</li>)}</ul>;

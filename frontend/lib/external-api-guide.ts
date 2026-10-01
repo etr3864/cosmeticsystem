@@ -9,7 +9,7 @@ export function externalApiBlocks(base: string): Block[] {
   return [
   { kind: "p", text: "זה ה־API שטוקן פותח. שירה, וכל מערכת אחרת, קוראות רק לכאן. המסכים של נועה עובדים עם עוגיית התחברות, והטוקן הזה לא נכנס אליהם ולא מוחק כרטיס, לא קובע תור, ולא משנה מחיר." },
   { kind: "h2", text: "כתובת" },
-  { kind: "p", text: `הבסיס נלקח מ־FRONTEND_URL בשרת, בלי סלאש בסוף, ואז /backend. עכשיו הוא ${base}. הקריאות עצמן ממשיכות ב־/api/v1/external.` },
+  { kind: "p", text: `הבסיס הוא כתובת האתר שפתוח עכשיו, בלי סלאש בסוף, ואז /backend. עכשיו הוא ${base}. הקריאות עצמן ממשיכות ב־/api/v1/external.` },
   { kind: "h2", text: "אימות" },
   { kind: "p", text: "בכל קריאה כותרת אחת:" },
   { kind: "code", text: "Authorization: Bearer YOUR_TOKEN\nContent-Type: application/json" },
@@ -91,7 +91,7 @@ export function externalApiBlocks(base: string): Block[] {
     "לא שולח וואטסאפ בעצמו, חוץ מתופעת הלוואי של אין מענה 3.",
   ] },
   { kind: "h2", text: "שלוש פונקציות" },
-  { kind: "p", text: "שם, שיטה, נתיב, ופרמטרים. הבסיס הוא FRONTEND_URL מהשרת." },
+  { kind: "p", text: "שם, שיטה, נתיב, ופרמטרים. הבסיס הוא כתובת האתר שפתוח עכשיו." },
   { kind: "code", text: `get_contact\n  GET ${root}/contacts/{phone}\n  phone: מחרוזת, חובה, בנתיב\n\nupsert_contact\n  POST ${root}/contacts/{phone}\n  phone: מחרוזת, חובה, בנתיב\n  name, source, salesStatus, notRelevantReason, summary, note: אופציונליים, בגוף JSON\n\nget_price\n  GET ${root}/contacts/{phone}/price?service={code}\n  phone: מחרוזת, חובה, בנתיב\n  service: קוד שירות, אופציונלי, ברירת מחדל NAILS` },
 ];
 }
