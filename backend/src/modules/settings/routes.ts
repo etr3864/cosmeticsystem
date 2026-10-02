@@ -6,6 +6,7 @@ import { requireUser, currentUser } from "../../http/session.js";
 import { jsonError } from "../../http/errors.js";
 import { decrypt, encrypt, randomToken, sha256 } from "../../lib/crypto.js";
 import { googleAccountEmail, mirrorAppointment, resetGoogleSync, testGoogle } from "../calendar/google.js";
+import { rememberAppointment } from "../appointments/service.js";
 
 export const settingsRoutes = new Hono();
 settingsRoutes.use("*", requireUser);
@@ -69,7 +70,10 @@ settingsRoutes.put("/services/:id", async (c) => {
       });
       moved.push(row.id);
     }
-    for (const id of moved) await mirrorAppointment(id);
+    for (const id of moved) {
+      await rememberAppointment(id, "זז");
+      await mirrorAppointment(id);
+    }
   }
   return c.json({ ok: true, price: service.price, durationMin: service.durationMin });
 });

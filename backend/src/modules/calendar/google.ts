@@ -3,7 +3,7 @@ import { prisma } from "@noa/db";
 import { buildNtDescription, parseNtTag } from "@noa/shared";
 import { decrypt } from "../../lib/crypto.js";
 import { logEvent } from "../../lib/log.js";
-import { cancelAppointment, createAppointment, placeAppointment } from "../appointments/service.js";
+import { cancelAppointment, createAppointment, placeAppointment, rememberAppointment } from "../appointments/service.js";
 
 type Account = { client_email: string; private_key: string };
 type GEvent = {
@@ -207,6 +207,7 @@ async function apply(event: GEvent) {
   if (row.status === "בוטל" || endsAt.getTime() - startsAt.getTime() < 30 * 60000) return;
   try {
     await placeAppointment(row.id, startsAt, endsAt, { wasRescheduled: true });
+    await rememberAppointment(row.id, "זז");
     await prisma.scheduledJob.updateMany({
       where: { idempotencyKey: `noshow:${row.id}`, status: "pending" },
       data: { runAt: new Date(endsAt.getTime() + 2 * 60 * 60 * 1000) },

@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@noa/db";
 import { calculatePrice, DISCOUNT_PERCENT } from "@noa/shared";
-import { enqueueAutomation } from "../automations/service.js";
+import { enqueueAutomation, pushFacts, rememberFacts } from "../automations/service.js";
+import { clock, hebrewDate } from "../../lib/time.js";
 import { addTimeline, becomeClient, recomputeService, setSalesStatus } from "../pipelines/service.js";
 
 function overlap(startsAt: Date, endsAt: Date, ignoreId?: string) {
@@ -85,7 +86,21 @@ export async function createAppointment(input: {
     }
   }
   await becomeClient(input.contactId, input.actor ?? input.bookedBy);
+  await rememberAppointment(appointment.id, "נקבע");
   return appointment;
+}
+
+export async function rememberAppointment(id: string, kind: "נקבע" | "זז" | "בוטל") {
+  const row = await prisma.appointment.findUnique({ where: { id }, include: { contact: true, service: true } });
+  if (!row) return;
+  const start = `${hebrewDate(row.startsAt)} בשעה ${clock(row.startsAt)}`;
+  const end = clock(row.endsAt);
+  const what = kind === "נקבע"
+    ? `נקבע תור ${row.service.name}. ההתחלה ${start}, והסיום ${end}.`
+    : kind === "זז"
+      ? `התור של ${row.service.name} זז. ההתחלה ${start}, והסיום ${end}.`
+      : `התור של ${row.service.name} בוטל. הוא היה ${start}.`;
+  await rememberFacts(row.contactId, pushFacts(what, { שירות: row.service.name, "מתי מתחיל": start, "מתי נגמר": end }));
 }
 
 export async function cancelAppointment(id: string, actor: string) {
@@ -99,6 +114,7 @@ export async function cancelAppointment(id: string, actor: string) {
     });
     await recomputeService(appointment.contactId, appointment.serviceId);
     await addTimeline(appointment.contactId, "appointment", actor, { appointmentId: id, cancelled: true, startsAt: appointment.startsAt });
+    await rememberAppointment(id, "בוטל");
   }
   return appointment;
 }

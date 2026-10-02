@@ -38,23 +38,42 @@ export function pushFacts(what: string, details: Record<string, string> = {}) {
   return { "מה זה": what, ...labeled };
 }
 
+async function pushOptive(contactId: string, facts: Record<string, string>, message?: string) {
+  const contact = await prisma.contact.findUnique({ where: { id: contactId } });
+  if (!contact) return { ok: false, name: "" };
+  const data = { לקוחה: contact.name, ...facts };
+  const secret = await prisma.secret.findUnique({ where: { key: "optive_api_key" } });
+  if (!secret) return { ok: false, name: contact.name };
+  const response = await fetch("https://api.0ptive.com/api/external/triggers/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-Key": decrypt(secret.ciphertext) },
+    body: JSON.stringify({ phone: toOptivePhone(contact.phone), persist: true, data, ...(message ? { message } : {}) }),
+  });
+  return { ok: response.ok, status: response.status, name: contact.name };
+}
+
+export async function rememberFacts(contactId: string, facts: Record<string, string>) {
+  try {
+    const saved = await pushOptive(contactId, facts);
+    if (!saved.name) return;
+    if (!saved.ok) await logEvent("automation", "warn", saved.status ? "שירה לא עודכנה" : "אין מפתח, שירה לא עודכנה", { contactId, status: saved.status });
+  } catch (error) {
+    await logEvent("automation", "error", "שירה לא עודכנה", { contactId, error: error instanceof Error ? error.message : "failed" }).catch(() => undefined);
+  }
+}
+
 export async function deliverMessage(contactId: string, template: string, vars: Record<string, string>, facts: Record<string, string>) {
   const contact = await prisma.contact.findUniqueOrThrow({ where: { id: contactId } });
   const message = withFirstName(template, firstName(contact.name), vars);
-  const data = { לקוחה: contact.name, ...facts };
   const secret = await prisma.secret.findUnique({ where: { key: "optive_api_key" } });
   if (!secret) {
     await logEvent("automation", "warn", "אין מפתח לשליחה, ההודעה נשמרה במערכת", { contactId });
     await addTimeline(contactId, "automation_sent", "automation", { message, delivered: false });
     return { delivered: false, message };
   }
-  const response = await fetch("https://api.0ptive.com/api/external/triggers/push", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-API-Key": decrypt(secret.ciphertext) },
-    body: JSON.stringify({ phone: toOptivePhone(contact.phone), persist: true, message, data }),
-  });
-  const delivered = response.ok;
-  if (!delivered) await logEvent("automation", "error", "השליחה נכשלה", { status: response.status, contactId });
+  const saved = await pushOptive(contactId, facts, message);
+  const delivered = saved.ok;
+  if (!delivered) await logEvent("automation", "error", "השליחה נכשלה", { status: saved.status, contactId });
   await addTimeline(contactId, "automation_sent", "automation", { message, delivered });
   return { delivered, message };
 }

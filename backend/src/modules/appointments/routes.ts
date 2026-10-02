@@ -4,7 +4,7 @@ import { prisma } from "@noa/db";
 import { calculatePrice, formatPhoneDisplay, parseNtTag } from "@noa/shared";
 import { currentUser, requireUser } from "../../http/session.js";
 import { jsonError } from "../../http/errors.js";
-import { cancelAppointment, createAppointment, markAttendance, placeAppointment } from "./service.js";
+import { cancelAppointment, createAppointment, markAttendance, placeAppointment, rememberAppointment } from "./service.js";
 import { mirrorAppointment } from "../calendar/google.js";
 import { addTimeline } from "../pipelines/service.js";
 import { clock, hebrewDate } from "../../lib/time.js";
@@ -124,6 +124,7 @@ appointmentRoutes.patch("/:id", async (c) => {
     });
   }
   if (changes.length) await addTimeline(current.contactId, "field_change", currentUser(c).username, { changes });
+  if (startsAt.getTime() !== current.startsAt.getTime() || endsAt.getTime() !== current.endsAt.getTime()) await rememberAppointment(current.id, "זז");
   await mirrorAppointment(current.id);
   return c.json({ ok: true, startsAt, endsAt });
 });
@@ -144,6 +145,7 @@ appointmentRoutes.post("/:id/move", async (c) => {
     await addTimeline(current.contactId, "field_change", currentUser(c).username, {
       changes: [{ field: "שעת התור", from: slotLabel(current.startsAt), to: slotLabel(startsAt) }],
     });
+    await rememberAppointment(current.id, "זז");
   }
   await mirrorAppointment(current.id);
   return c.json({ ok: true, startsAt, endsAt });
