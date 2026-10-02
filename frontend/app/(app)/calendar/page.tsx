@@ -26,12 +26,15 @@ type Item = {
   service: { id: string; name: string };
 };
 type Review = { id: string; title: string; detectedPhone: string | null };
+type Hold = { id: string; title: string; startsAt: string; endsAt: string };
 
-const tone = { set: "#522A0C", arrived: "#3F6B3A", missed: "#9B2F45", unmarked: "#8A817A", cancelled: "#665B53" };
+const tone = { set: "#522A0C", arrived: "#3F6B3A", missed: "#9B2F45", unmarked: "#8A817A", cancelled: "#665B53", hold: "#8A817A" };
 
 export default function CalendarPage() {
   const [items, setItems] = useState<Item[]>([]);
+  const [holds, setHolds] = useState<Hold[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [hold, setHold] = useState<Hold | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
   const [draft, setDraft] = useState<Date | null>(null);
   const [cardId, setCardId] = useState<string | null>(null);
@@ -44,7 +47,10 @@ export default function CalendarPage() {
   const calendarRef = useRef<FullCalendar>(null);
 
   function load(from: Date, to: Date) {
-    api<{ items: Item[] }>(`/appointments?from=${from.toISOString()}&to=${to.toISOString()}`).then((data) => setItems(data.items)).catch(() => setItems([]));
+    api<{ items: Item[]; holds?: Hold[] }>(`/appointments?from=${from.toISOString()}&to=${to.toISOString()}`).then((data) => {
+      setItems(data.items);
+      setHolds(data.holds ?? []);
+    }).catch(() => { setItems([]); setHolds([]); });
     api<{ items: Review[] }>("/appointments/reviews").then((data) => setReviews(data.items)).catch(() => setReviews([]));
   }
 
@@ -116,7 +122,14 @@ export default function CalendarPage() {
   }
 
   async function move(info: EventDropArg) {
+    const held = holdId(info.event.id);
     try {
+      if (held) {
+        await api(`/appointments/holds/${held}/move`, { method: "POST", body: JSON.stringify({ startsAt: info.event.start?.toISOString(), endsAt: info.event.end?.toISOString() }) });
+        pushToast("האירוע זז");
+        reload();
+        return;
+      }
       await api(`/appointments/${info.event.id}/move`, { method: "POST", body: JSON.stringify({ startsAt: info.event.start?.toISOString() }) });
       pushToast("התור זז");
     } catch (error) {
@@ -127,13 +140,32 @@ export default function CalendarPage() {
 
   async function resize(info: { event: { id: string; start: Date | null; end: Date | null }; revert: () => void }) {
     if (!info.event.start || !info.event.end) return info.revert();
+    const held = holdId(info.event.id);
     try {
+      if (held) {
+        await api(`/appointments/holds/${held}/move`, { method: "POST", body: JSON.stringify({ startsAt: info.event.start.toISOString(), endsAt: info.event.end.toISOString() }) });
+        pushToast("האירוע זז");
+        reload();
+        return;
+      }
       await api(`/appointments/${info.event.id}`, { method: "PATCH", body: JSON.stringify({ startsAt: info.event.start.toISOString(), endsAt: info.event.end.toISOString() }) });
       pushToast("התור עודכן");
       reload();
     } catch (error) {
       info.revert();
       pushToast(error instanceof Error ? error.message : "השעה נתפסה");
+    }
+  }
+
+  async function removeHold(id: string) {
+    if (!window.confirm("למחוק את האירוע?")) return;
+    try {
+      await api(`/appointments/holds/${id}`, { method: "DELETE" });
+      setHold(null);
+      pushToast("נמחק");
+      reload();
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "גוגל לא מחק");
     }
   }
 
@@ -197,16 +229,33 @@ export default function CalendarPage() {
           dayCellContent={(arg) => <DayLabel arg={arg} onPlus={() => openAt(atNine(arg.date))} />}
           eventDrop={move}
           eventResize={resize}
-          events={items.map((item) => ({
-            id: item.id,
-            title: item.contact.name,
-            start: item.startsAt,
-            end: item.endsAt,
-            extendedProps: item,
-          }))}
+          events={[
+            ...items.map((item) => ({
+              id: item.id,
+              title: item.contact.name,
+              start: item.startsAt,
+              end: item.endsAt,
+              extendedProps: item,
+            })),
+            ...holds.map((item) => ({
+              id: `hold:${item.id}`,
+              title: item.title,
+              start: item.startsAt,
+              end: item.endsAt,
+              extendedProps: { ...item, kind: "hold" as const },
+            })),
+          ]}
           eventContent={(arg) => <Chip arg={arg} />}
           eventClick={(info) => {
             info.jsEvent.stopPropagation();
+            const held = holdId(info.event.id);
+            if (held) {
+              setDraft(null);
+              setEditing(null);
+              setHold(holds.find((item) => item.id === held) ?? null);
+              return;
+            }
+            setHold(null);
             setDraft(null);
             setEditing(items.find((item) => item.id === info.event.id) ?? null);
           }}
@@ -222,6 +271,20 @@ export default function CalendarPage() {
           onOpenCard={() => { setCardId(editing.contact.id); setEditing(null); }}
           onBooked={() => { setEditing(null); reload(); }}
         />
+      ) : null}
+      {hold ? (
+        <div className="pointer-events-none fixed inset-0 z-[80] flex items-end justify-center p-4 sm:items-center">
+          <button type="button" className="drawer-bg pointer-events-auto !z-0" aria-label="סגירה" onClick={() => setHold(null)} />
+          <div className="glass pointer-events-auto relative !z-10 w-[min(420px,100%)] rounded-xl p-5">
+            <p className="text-[12px] font-bold tracking-[0.16em] text-goldInk">אירוע מגוגל</p>
+            <h2 className="mt-1 text-2xl">{hold.title}</h2>
+            <p className="mt-2 text-sm text-muted">{clock(new Date(hold.startsAt))}–{clock(new Date(hold.endsAt))}. זה לא תור. גרירה מזיזה אותו גם בגוגל.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" onClick={() => removeHold(hold.id)} className="rounded-full bg-[#9B2F45] px-5 py-2 text-white">מחיקה</button>
+              <button type="button" onClick={() => setHold(null)} className="rounded-full bg-white px-5 py-2">סגירה</button>
+            </div>
+          </div>
+        </div>
       ) : null}
       {cardId ? <ContactDrawer id={cardId} kind="lead" onChanged={reload} onClose={() => { setCardId(null); reload(); }} /> : null}
     </section>
@@ -247,15 +310,16 @@ function DayLabel({ arg, onPlus }: { arg: DayCellContentArg; onPlus: () => void 
 }
 
 function Chip({ arg }: { arg: EventContentArg }) {
+  const held = arg.event.extendedProps.kind === "hold";
   const item = arg.event.extendedProps as Item;
-  const look = chipLook(item.status, arg.event.end);
+  const look = held ? "hold" : chipLook(item.status, arg.event.end);
   const month = arg.view.type === "dayGridMonth";
   const range = `${clock(arg.event.start)}–${clock(arg.event.end)}`;
   return (
     <span className={`nt-chip ${look}`} style={{ ["--st" as string]: tone[look] }}>
-      <b>{arg.event.title.split(" ")[0]}</b>
+      <b>{held ? arg.event.title : arg.event.title.split(" ")[0]}</b>
       <span className="nt-when">{range}</span>
-      {month ? (
+      {held ? <span className="nt-meta">גוגל</span> : month ? (
         item.notes ? <span className="nt-note">{item.notes}</span> : <span className="nt-meta">{item.service?.name}</span>
       ) : (
         <>
@@ -265,6 +329,10 @@ function Chip({ arg }: { arg: EventContentArg }) {
       )}
     </span>
   );
+}
+
+function holdId(value: string) {
+  return value.startsWith("hold:") ? value.slice(5) : "";
 }
 
 function chipLook(status: string, end: Date | null): keyof typeof tone {

@@ -3,6 +3,7 @@ import { prisma } from "@noa/db";
 import { buildNtDescription, parseNtTag } from "@noa/shared";
 import { decrypt } from "../../lib/crypto.js";
 import { logEvent } from "../../lib/log.js";
+import { addDays, atJerusalem } from "../../lib/time.js";
 import { cancelAppointment, createAppointment, placeAppointment, rememberAppointment } from "../appointments/service.js";
 
 type Account = { client_email: string; private_key: string };
@@ -11,8 +12,8 @@ type GEvent = {
   status?: string;
   summary?: string;
   description?: string;
-  start?: { dateTime?: string };
-  end?: { dateTime?: string };
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
   extendedProperties?: { private?: { appointmentId?: string } };
 };
 
@@ -138,11 +139,89 @@ export async function testGoogle() {
   if (!response.ok) throw new Error("google");
 }
 
+function eventSpan(event: GEvent) {
+  if (event.start?.dateTime && event.end?.dateTime) {
+    const startsAt = new Date(event.start.dateTime);
+    const endsAt = new Date(event.end.dateTime);
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) return null;
+    return { startsAt, endsAt };
+  }
+  if (!event.start?.date) return null;
+  const last = event.end?.date ? addDays(event.end.date, -1) : event.start.date;
+  const startsAt = atJerusalem(event.start.date, 8 * 60);
+  const endsAt = atJerusalem(last, 21 * 60);
+  if (endsAt <= startsAt) return null;
+  return { startsAt, endsAt };
+}
+
+async function saveHold(event: GEvent) {
+  if (!event.id) return;
+  if (event.status === "cancelled") {
+    await prisma.calendarHold.deleteMany({ where: { googleEventId: event.id } });
+    return;
+  }
+  const span = eventSpan(event);
+  if (!span) return;
+  const title = (event.summary ?? "").trim() || "חסום";
+  await prisma.calendarHold.upsert({
+    where: { googleEventId: event.id },
+    update: { title, startsAt: span.startsAt, endsAt: span.endsAt },
+    create: { googleEventId: event.id, title, startsAt: span.startsAt, endsAt: span.endsAt },
+  });
+}
+
+async function dropHold(googleEventId: string | undefined) {
+  if (!googleEventId) return;
+  await prisma.calendarHold.deleteMany({ where: { googleEventId } });
+}
+
+export async function shiftHold(id: string, startsAt: Date, endsAt: Date) {
+  const hold = await prisma.calendarHold.findUnique({ where: { id } });
+  if (!hold) return null;
+  if (!(endsAt > startsAt)) throw new Error("invalid");
+  const appointment = await prisma.appointment.findFirst({
+    where: { status: { not: "בוטל" }, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } },
+  });
+  const other = await prisma.calendarHold.findFirst({
+    where: { id: { not: id }, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } },
+  });
+  if (appointment || other) throw new Error("taken");
+  const response = await google(`/events/${encodeURIComponent(hold.googleEventId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      start: { dateTime: startsAt.toISOString(), timeZone: "Asia/Jerusalem" },
+      end: { dateTime: endsAt.toISOString(), timeZone: "Asia/Jerusalem" },
+    }),
+  });
+  if (!response) throw new Error("missing");
+  if (!response.ok) throw new Error("google");
+  return prisma.calendarHold.update({ where: { id }, data: { startsAt, endsAt } });
+}
+
+export async function removeHold(id: string) {
+  const hold = await prisma.calendarHold.findUnique({ where: { id } });
+  if (!hold) return null;
+  const response = await google(`/events/${encodeURIComponent(hold.googleEventId)}`, { method: "DELETE" });
+  if (!response) throw new Error("missing");
+  if (response.status !== 204 && response.status !== 404 && response.status !== 410) throw new Error("google");
+  await prisma.calendarHold.delete({ where: { id } });
+  return hold;
+}
+
 async function adopt(event: GEvent) {
-  if (!event.id || event.status === "cancelled" || !event.start?.dateTime) return;
+  if (!event.id) return;
+  if (event.status === "cancelled") {
+    await dropHold(event.id);
+    return;
+  }
   const text = `${event.summary ?? ""}\n${event.description ?? ""}`;
   const parsed = parseNtTag(text);
-  if (!parsed) return;
+  if (!parsed) {
+    await saveHold(event);
+    return;
+  }
+  if (!event.start?.dateTime) return;
+  await dropHold(event.id);
   const known = await prisma.appointment.findFirst({ where: { googleEventId: event.id } });
   if (known) return;
   const service = await prisma.service.findFirst({ where: { code: parsed.serviceCode ?? "NAILS" } })
@@ -195,6 +274,7 @@ async function apply(event: GEvent) {
     await adopt(event);
     return;
   }
+  await dropHold(event.id);
   if (event.status === "cancelled") {
     if (row.status !== "בוטל") await cancelAppointment(row.id, "google");
     return;
@@ -222,6 +302,11 @@ export async function pullGoogle() {
   pulling = true;
   try {
     if (!(await account()) || !(await calendarId())) return;
+    const backfill = await prisma.setting.findUnique({ where: { key: "googleHoldsBackfill" } });
+    if (!backfill) {
+      await prisma.setting.deleteMany({ where: { key: "googleSyncToken" } });
+      await prisma.setting.create({ data: { key: "googleHoldsBackfill", value: true } });
+    }
     const saved = await prisma.setting.findUnique({ where: { key: "googleSyncToken" } });
     const syncToken = typeof saved?.value === "string" ? saved.value : "";
     const query = new URLSearchParams({ singleEvents: "true", showDeleted: "true", maxResults: "100" });

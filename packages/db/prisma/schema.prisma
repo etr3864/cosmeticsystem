@@ -281,3 +281,13 @@ model CalendarReview {
   status        String   @default("open")
   createdAt     DateTime @default(now())
 }
+
+model CalendarHold {
+  id            String   @id @default(cuid())
+  googleEventId String   @unique
+  title         String
+  startsAt      DateTime
+  endsAt        DateTime
+  updatedAt     DateTime @updatedAt
+  @@index([startsAt])
+}

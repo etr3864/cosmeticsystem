@@ -454,6 +454,9 @@ input:focus, select:focus, textarea:focus {
 .nt-chip.arrived:hover { background: rgb(63 107 58 / 24%); }
 .nt-chip.missed:hover { background: rgb(155 47 69 / 20%); }
 .nt-chip.unmarked:hover { background: #DDD7D0; }
+.nt-chip.hold { background: #EFE6D6; color: #5C4A32; }
+.nt-chip.hold .nt-when, .nt-chip.hold .nt-meta { color: #86601C; }
+.nt-chip.hold:hover { background: #E7DCC8; }
 .nt-chip b { display: block; max-width: 100%; overflow: hidden; font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 .nt-when, .nt-meta, .nt-note { display: block; max-width: 100%; overflow: hidden; font-size: 10px; font-weight: 500; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .nt-when { color: #86601C; }

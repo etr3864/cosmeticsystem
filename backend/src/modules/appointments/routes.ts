@@ -5,7 +5,7 @@ import { calculatePrice, formatPhoneDisplay, parseNtTag } from "@noa/shared";
 import { currentUser, requireUser } from "../../http/session.js";
 import { jsonError } from "../../http/errors.js";
 import { cancelAppointment, createAppointment, markAttendance, placeAppointment, rememberAppointment } from "./service.js";
-import { mirrorAppointment } from "../calendar/google.js";
+import { mirrorAppointment, removeHold, shiftHold } from "../calendar/google.js";
 import { addTimeline } from "../pipelines/service.js";
 import { clock, hebrewDate } from "../../lib/time.js";
 
@@ -21,7 +21,43 @@ appointmentRoutes.get("/", async (c) => {
     orderBy: { startsAt: "asc" },
   });
   const reviews = await prisma.calendarReview.count({ where: { status: "open" } });
-  return c.json({ reviews, items });
+  const holds = await prisma.calendarHold.findMany({
+    where: { startsAt: { lt: to }, endsAt: { gt: from } },
+    orderBy: { startsAt: "asc" },
+  });
+  return c.json({ reviews, items, holds });
+});
+
+appointmentRoutes.post("/holds/:id/move", async (c) => {
+  const body = z.object({ startsAt: z.string(), endsAt: z.string().optional() }).parse(await c.req.json());
+  const current = await prisma.calendarHold.findUnique({ where: { id: c.req.param("id") } });
+  if (!current) return jsonError(c, 404, "not_found", "האירוע לא נמצא");
+  const startsAt = new Date(body.startsAt);
+  const endsAt = body.endsAt
+    ? new Date(body.endsAt)
+    : new Date(startsAt.getTime() + (current.endsAt.getTime() - current.startsAt.getTime()));
+  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) return jsonError(c, 400, "invalid", "השעה לא תקינה");
+  try {
+    const saved = await shiftHold(current.id, startsAt, endsAt);
+    if (!saved) return jsonError(c, 404, "not_found", "האירוע לא נמצא");
+    return c.json({ ok: true, startsAt, endsAt });
+  } catch (error) {
+    if (error instanceof Error && error.message === "google") return jsonError(c, 422, "google", "גוגל לא עדכן");
+    if (error instanceof Error && error.message === "missing") return jsonError(c, 422, "missing", "חסר חיבור ליומן");
+    throw error;
+  }
+});
+
+appointmentRoutes.delete("/holds/:id", async (c) => {
+  try {
+    const removed = await removeHold(c.req.param("id"));
+    if (!removed) return jsonError(c, 404, "not_found", "האירוע לא נמצא");
+    return c.json({ ok: true });
+  } catch (error) {
+    if (error instanceof Error && error.message === "google") return jsonError(c, 422, "google", "גוגל לא מחק");
+    if (error instanceof Error && error.message === "missing") return jsonError(c, 422, "missing", "חסר חיבור ליומן");
+    throw error;
+  }
 });
 
 appointmentRoutes.get("/reviews", async (c) => {

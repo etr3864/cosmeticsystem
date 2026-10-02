@@ -24,7 +24,8 @@ function withCalendarLock<T>(work: (tx: Prisma.TransactionClient) => Promise<T>)
 export function placeAppointment(id: string, startsAt: Date, endsAt: Date, data: Prisma.AppointmentUpdateInput) {
   return withCalendarLock(async (tx) => {
     const clash = await tx.appointment.findFirst({ where: overlap(startsAt, endsAt, id) });
-    if (clash) throw new Error("taken");
+    const held = await tx.calendarHold.findFirst({ where: { startsAt: { lt: endsAt }, endsAt: { gt: startsAt } } });
+    if (clash || held) throw new Error("taken");
     return tx.appointment.update({ where: { id }, data: { ...data, startsAt, endsAt } });
   });
 }
@@ -45,7 +46,8 @@ export async function createAppointment(input: {
   const price = calculatePrice(service.price, discounts, []);
   const appointment = await withCalendarLock(async (tx) => {
     const clash = await tx.appointment.findFirst({ where: overlap(input.startsAt, input.endsAt) });
-    if (clash) throw new Error("taken");
+    const held = await tx.calendarHold.findFirst({ where: { startsAt: { lt: input.endsAt }, endsAt: { gt: input.startsAt } } });
+    if (clash || held) throw new Error("taken");
     return tx.appointment.create({
       data: {
         contactId: input.contactId,

@@ -18,7 +18,10 @@ export async function openSlots(serviceCode: string) {
     const busyRows = await prisma.appointment.findMany({
       where: { status: { not: "בוטל" }, startsAt: { lt: end }, endsAt: { gt: start } },
     });
-    const busy = busyRows.map((row) => ({
+    const heldRows = await prisma.calendarHold.findMany({
+      where: { startsAt: { lt: end }, endsAt: { gt: start } },
+    });
+    const busy = [...busyRows, ...heldRows].map((row) => ({
       startMin: minutesFromClock(row.startsAt.toLocaleTimeString("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" })),
       endMin: minutesFromClock(row.endsAt.toLocaleTimeString("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" })),
     }));
