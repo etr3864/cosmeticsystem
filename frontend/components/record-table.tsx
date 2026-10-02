@@ -285,20 +285,21 @@ export function RecordTable({ kind }: { kind: "lead" | "client" }) {
         />
       ) : null}
       {openId ? <ContactDrawer id={openId} kind={kind} onChanged={() => load()} onClose={() => { setOpenId(null); load(); }} /> : null}
-      {confirmDelete ? (
+      {confirmDelete ? createPortal(
         <>
-          <button className={`drawer-bg${deleteDismiss.leaving ? " out" : ""}`} aria-label="סגירה" onClick={() => deleteDismiss.requestClose()} />
-          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div onAnimationEnd={deleteDismiss.onAnimationEnd} className={`glass pointer-events-auto w-[min(420px,100%)] rounded-xl p-6 ${deleteDismiss.leaving ? "sheet-out" : "sheet-in"}`}>
-            <h2 className="text-2xl">{selected.length === 1 ? (kind === "lead" ? "למחוק ליד אחד?" : "למחוק לקוחה אחת?") : `למחוק ${selected.length} ${kind === "lead" ? "לידים" : "לקוחות"}?`}</h2>
-            <p className="mt-2 text-muted">המחיקה סופית, אי אפשר לשחזר.</p>
-            <div className="mt-4 flex gap-2">
-              <button onClick={() => void removeSelected()} className="rounded-full bg-[#9B2F45] px-5 py-3 text-white">מחיקה</button>
-              <button onClick={() => deleteDismiss.requestClose()} className="rounded-full bg-white/80 px-5 py-3">ביטול</button>
+          <button type="button" className={`drawer-bg book-layer${deleteDismiss.leaving ? " out" : ""}`} aria-label="סגירה" onClick={() => deleteDismiss.requestClose()} />
+          <div className="book-layer pointer-events-none fixed inset-0 flex items-center justify-center p-4">
+            <div onAnimationEnd={deleteDismiss.onAnimationEnd} className={`glass pointer-events-auto relative z-10 w-[min(420px,100%)] rounded-xl p-6 ${deleteDismiss.leaving ? "sheet-out" : "sheet-in"}`}>
+              <h2 className="text-2xl">{selected.length === 1 ? (kind === "lead" ? "למחוק ליד אחד?" : "למחוק לקוחה אחת?") : `למחוק ${selected.length} ${kind === "lead" ? "לידים" : "לקוחות"}?`}</h2>
+              <p className="mt-2 text-muted">המחיקה סופית, אי אפשר לשחזר.</p>
+              <div className="mt-4 flex gap-2">
+                <button type="button" onClick={() => void removeSelected()} className="rounded-full bg-[#9B2F45] px-5 py-3 text-white">מחיקה</button>
+                <button type="button" onClick={() => deleteDismiss.requestClose()} className="rounded-full bg-white/80 px-5 py-3">ביטול</button>
+              </div>
             </div>
           </div>
-          </div>
-        </>
+        </>,
+        document.body,
       ) : null}
     </section>
   );
