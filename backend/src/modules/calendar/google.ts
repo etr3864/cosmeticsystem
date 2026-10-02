@@ -246,7 +246,7 @@ async function adopt(event: GEvent) {
       serviceId: service.id,
       startsAt,
       endsAt,
-      bookedBy: "יומן גוגל",
+      bookedBy: parsed.bookedByAi ? "AI" : "נועה",
       actor: "google",
     });
     await prisma.appointment.update({ where: { id: appointment.id }, data: { googleEventId: event.id } });

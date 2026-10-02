@@ -109,7 +109,8 @@ appointmentRoutes.post("/", async (c) => {
     actor: currentUser(c).username,
   });
   await mirrorAppointment(appointment.id);
-  return c.json({ ...appointment, becameClient: before?.salesStatus !== "לקוחה פעילה" }, 201);
+  const after = await prisma.contact.findUnique({ where: { id: body.contactId }, select: { salesStatus: true } });
+  return c.json({ ...appointment, becameClient: before?.salesStatus !== "לקוחה פעילה" && after?.salesStatus === "לקוחה פעילה" }, 201);
 });
 
 appointmentRoutes.patch("/:id", async (c) => {

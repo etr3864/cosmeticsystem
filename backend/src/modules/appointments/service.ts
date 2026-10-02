@@ -3,7 +3,7 @@ import { prisma } from "@noa/db";
 import { calculatePrice, DISCOUNT_PERCENT } from "@noa/shared";
 import { enqueueAutomation, pushFacts, rememberFacts } from "../automations/service.js";
 import { clock, hebrewDate } from "../../lib/time.js";
-import { addTimeline, becomeClient, recomputeService, setSalesStatus } from "../pipelines/service.js";
+import { addTimeline, onAppointmentBooked, recomputeService, setSalesStatus } from "../pipelines/service.js";
 
 function overlap(startsAt: Date, endsAt: Date, ignoreId?: string) {
   return {
@@ -87,7 +87,7 @@ export async function createAppointment(input: {
       });
     }
   }
-  await becomeClient(input.contactId, input.actor ?? input.bookedBy);
+  await onAppointmentBooked(input.contactId, input.bookedBy, input.actor ?? input.bookedBy);
   await rememberAppointment(appointment.id, "נקבע");
   return appointment;
 }
@@ -163,9 +163,8 @@ export async function markAttendance(input: {
   if (changes.length) await addTimeline(appointment.contactId, "field_change", input.actor, { changes });
   await recomputeService(appointment.contactId, appointment.serviceId);
   const arrivedCount = await prisma.appointment.count({ where: { contactId: appointment.contactId, status: "הגיעה" } });
-  if (input.status === "הגיעה" && appointment.contact.salesStatus !== "לקוחה פעילה" && arrivedCount >= 1) {
-    await setSalesStatus(appointment.contactId, "לקוחה פעילה", "system");
-  }
+  const becameClient = input.status === "הגיעה" && appointment.contact.salesStatus !== "לקוחה פעילה" && arrivedCount >= 1;
+  if (becameClient) await setSalesStatus(appointment.contactId, "לקוחה פעילה", "system");
   if (input.status === "הגיעה" && arrivedCount === 1 && appointment.contact.referredById) {
     const expiresAt = new Date();
     expiresAt.setMonth(expiresAt.getMonth() + 3);
@@ -175,7 +174,8 @@ export async function markAttendance(input: {
   }
   if (input.status === "לא הגיעה" && appointment.status !== "לא הגיעה") {
     await prisma.contact.update({ where: { id: appointment.contactId }, data: { noShowCount: { increment: 1 } } });
-    if (appointment.contact.salesStatus !== "לקוחה פעילה") await setSalesStatus(appointment.contactId, "לא הגיעה", "system");
+    const parked = appointment.contact.salesStatus === "נקבע תור AI" || appointment.contact.salesStatus === "נקבע תור אנושי" || appointment.contact.salesStatus === "לקוחה פעילה";
+    if (!parked) await setSalesStatus(appointment.contactId, "לא הגיעה", "system");
     await prisma.scheduledJob.updateMany({
       where: { idempotencyKey: `noshow:${appointment.id}`, status: "pending" },
       data: { runAt: new Date() },
@@ -198,7 +198,7 @@ export async function markAttendance(input: {
     });
   }
   const saved = await prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id }, include: { service: true, contact: true } });
-  return { ...saved, messageQueued };
+  return { ...saved, messageQueued, becameClient };
 }
 
 async function applyCredits(contactId: string, appointmentId: string, listPrice: number, discountPct: number, completions: number) {

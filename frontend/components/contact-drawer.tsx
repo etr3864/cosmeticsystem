@@ -78,11 +78,14 @@ export function ContactDrawer({ id, kind, onClose, onChanged }: { id: string; ki
   async function setStatus(next: string) {
     if (mode === "lead" && next === "נקבע תור אנושי") {
       const booked = person.appointments.some((item) => item.status === "נקבע");
-      if (booked) {
-        await api(`/contacts/${person.id}`, { method: "PATCH", body: JSON.stringify({ salesStatus: "לקוחה פעילה" }) });
-        pushToast("עברה ללקוחות");
-        await load();
-      } else setBookAt(nextOpenSlot());
+      if (!booked) {
+        setBookAt(nextOpenSlot());
+        return;
+      }
+      if (person.salesStatus === "נקבע תור AI" || person.salesStatus === "נקבע תור אנושי") return;
+      await api(`/contacts/${person.id}`, { method: "PATCH", body: JSON.stringify({ salesStatus: "נקבע תור אנושי" }) });
+      pushToast("נשמר");
+      await load();
       return;
     }
     if (mode === "lead" && next === "לא רלוונטית") {

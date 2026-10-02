@@ -67,6 +67,11 @@ export function salesTransitionMissing(status: SalesStatus, reason?: string | nu
   return null;
 }
 
+export function salesStatusAfterBooking(current: string, bookedBy: string): SalesStatus | null {
+  if (current === "לקוחה פעילה") return null;
+  return bookedBy === "AI" ? "נקבע תור AI" : "נקבע תור אנושי";
+}
+
 export function opsLeaveMissing(status: OpsStatus, reason?: string | null): string | null {
   if (status === "עזבה" && !reason?.trim()) return "סיבת עזיבה";
   return null;

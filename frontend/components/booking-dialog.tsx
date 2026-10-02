@@ -65,9 +65,9 @@ export function BookingDialog({ startsAt, onClose, onBooked, existing, lockConta
     if (!existing) return;
     setBusy(true);
     try {
-      await api(`/appointments/${existing.id}/attendance`, { method: "POST", body: JSON.stringify({ status }) });
+      const saved = await api<{ becameClient?: boolean }>(`/appointments/${existing.id}/attendance`, { method: "POST", body: JSON.stringify({ status }) });
       setAttendance(status);
-      pushToast("נשמר");
+      pushToast(saved.becameClient ? "עברה ללקוחות" : "נשמר");
       requestClose(() => onBooked(existing.contactId));
     } catch (error) {
       pushToast(error instanceof Error ? error.message : "לא הצלחנו");

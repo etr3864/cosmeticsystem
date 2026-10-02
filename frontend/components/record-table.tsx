@@ -21,7 +21,7 @@ type Row = {
   services: { serviceId: string; status: string; firstVisitAt: string | null }[];
 };
 
-const leadStatuses = ["ליד חדש", "אין מענה 1", "אין מענה 2", "אין מענה 3", "נקבע תור אנושי", "לא רלוונטית"];
+const leadStatuses = ["ליד חדש", "אין מענה 1", "אין מענה 2", "אין מענה 3", "נקבע תור AI", "נקבע תור אנושי", "לא רלוונטית"];
 const ops = ["חדשה", "חוזרת", "קבועה", "בסיכון", "רדומה", "עזבה"];
 const sources = ["מודעה ממומנת", "המלצה מלקוחה", "קבוצת וואטסאפ", "אינסטגרם אורגני", "פנייה ישירה לנועה", "אחר"];
 
@@ -132,8 +132,9 @@ export function RecordTable({ kind }: { kind: "lead" | "client" }) {
         setBookLead(row);
         return;
       }
-      await api(`/contacts/${row.id}`, { method: "PATCH", body: JSON.stringify({ salesStatus: "לקוחה פעילה" }) });
-      pushToast("עברה ללקוחות");
+      if (row.salesStatus === "נקבע תור AI" || row.salesStatus === "נקבע תור אנושי") return;
+      await api(`/contacts/${row.id}`, { method: "PATCH", body: JSON.stringify({ salesStatus: "נקבע תור אנושי" }) });
+      pushToast("נשמר");
       load();
       return;
     }

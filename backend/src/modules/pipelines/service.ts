@@ -6,6 +6,7 @@ import {
   normalizePhone,
   opsLeaveMissing,
   resolveOpsStatus,
+  salesStatusAfterBooking,
   salesTransitionMissing,
   type SalesStatus,
 } from "@noa/shared";
@@ -125,6 +126,19 @@ export async function becomeClient(contactId: string, actor: string) {
   const contact = await prisma.contact.findUnique({ where: { id: contactId } });
   if (!contact || contact.salesStatus === "לקוחה פעילה") return false;
   await setSalesStatus(contactId, "לקוחה פעילה", actor);
+  return true;
+}
+
+export async function onAppointmentBooked(contactId: string, bookedBy: string, actor: string) {
+  const contact = await prisma.contact.findUnique({ where: { id: contactId } });
+  if (!contact) return false;
+  const next = salesStatusAfterBooking(contact.salesStatus, bookedBy);
+  if (!next) return false;
+  await setSalesStatus(contactId, next, actor);
+  await prisma.scheduledJob.updateMany({
+    where: { contactId, status: "pending", idempotencyKey: { startsWith: `no3:${contactId}` } },
+    data: { status: "cancelled" },
+  });
   return true;
 }
 

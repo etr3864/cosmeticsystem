@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gradeFromVisits, resolveOpsStatus, salesTransitionMissing } from "./statuses.js";
+import { gradeFromVisits, resolveOpsStatus, salesStatusAfterBooking, salesTransitionMissing } from "./statuses.js";
 
 describe("ops status", () => {
   it("derives the grade from visits", () => {
@@ -14,6 +14,14 @@ describe("ops status", () => {
     expect(resolveOpsStatus({ ...base, daysSinceLastVisit: 30 })).toBe("בסיכון");
     expect(resolveOpsStatus({ ...base, daysSinceLastVisit: 70 })).toBe("רדומה");
     expect(resolveOpsStatus({ ...base, daysSinceLastVisit: 70, hasFutureAppointment: true })).toBe("קבועה");
+  });
+
+  it("keeps an active client on booking and parks everyone else on the booked step", () => {
+    expect(salesStatusAfterBooking("לקוחה פעילה", "AI")).toBeNull();
+    expect(salesStatusAfterBooking("לקוחה פעילה", "נועה")).toBeNull();
+    expect(salesStatusAfterBooking("ליד חדש", "AI")).toBe("נקבע תור AI");
+    expect(salesStatusAfterBooking("אין מענה 2", "נועה")).toBe("נקבע תור אנושי");
+    expect(salesStatusAfterBooking("לא רלוונטית", "המלצה")).toBe("נקבע תור אנושי");
   });
 
   it("requires a reason when a lead is not relevant", () => {
