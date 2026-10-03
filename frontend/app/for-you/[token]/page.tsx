@@ -111,7 +111,7 @@ export default function ForYouPage({ params }: { params: Promise<{ token: string
                     key={option}
                     disabled={busy}
                     onClick={() => question.detail ? setPicked(option) : next(option)}
-                    className={`rounded-2xl px-4 py-4 text-right text-lg ${picked === option || answers[question.id] === option ? "bg-brand text-onBrand" : "bg-sunken text-ink"}`}
+                    className={`guest-choice ${picked === option || answers[question.id] === option ? "on" : ""}`}
                   >
                     {option}
                   </button>
@@ -130,7 +130,7 @@ export default function ForYouPage({ params }: { params: Promise<{ token: string
                       className="w-full rounded-2xl border border-lineStrong bg-white px-4 py-4"
                       placeholder={question.detail}
                     />
-                    <button disabled={busy} className="mt-3 w-full rounded-full bg-brand py-3 text-onBrand">המשך</button>
+                    <button disabled={busy} className="guest-confirm mt-3">המשך</button>
                   </form>
                 ) : null}
               </>
@@ -143,7 +143,7 @@ export default function ForYouPage({ params }: { params: Promise<{ token: string
                   className="w-full rounded-2xl border border-lineStrong bg-white px-4 py-4"
                   placeholder="כאן"
                 />
-                <button disabled={busy} className="mt-3 w-full rounded-full bg-brand py-3 text-onBrand">המשך</button>
+                <button disabled={busy} className="guest-confirm mt-3">המשך</button>
               </form>
             )}
           </div>

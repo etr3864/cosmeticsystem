@@ -34,10 +34,12 @@ export function guestClock(iso: string) {
 
 export function GuestScreen({ children }: { children: ReactNode }) {
   return (
-    <main className="guest-page mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-10 sm:px-5 sm:py-12">
-      <p className="guest-mark">בס״ד</p>
-      {children}
-    </main>
+    <div className="guest-shell">
+      <main className="guest-page mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-10 sm:px-5 sm:py-12">
+        <p className="guest-mark">בס״ד</p>
+        {children}
+      </main>
+    </div>
   );
 }
 

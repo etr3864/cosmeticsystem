@@ -2,15 +2,17 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { GuestHero, GuestNote, GuestScreen, firstOf, guestClock, guestDay, guestWhen } from "@/components/guest";
+import { GuestHero, GuestNote, GuestScreen, firstOf, guestWhen } from "@/components/guest";
+import { GuestDayPick, type OpenDay } from "@/components/guest-book";
 
-type Day = { day: string; slots: string[] };
+type Day = OpenDay;
 
 export default function PartnersPage({ params }: { params: Promise<{ token: string }> }) {
   const [name, setName] = useState("");
   const [token, setToken] = useState("");
   const [days, setDays] = useState<Day[]>([]);
   const [slot, setSlot] = useState("");
+  const [taken, setTaken] = useState("");
   const [done, setDone] = useState("");
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
@@ -22,7 +24,7 @@ export default function PartnersPage({ params }: { params: Promise<{ token: stri
       const data = await api<{ name: string }>(`/public/${value.token}`);
       setName(data.name);
       const slots = await api<{ days: Day[] }>(`/public/${value.token}/slots`);
-      setDays(slots.days.filter((day) => day.slots.length > 0));
+      setDays(slots.days);
       setReady(true);
     }).catch((err: Error) => setError(err.message));
   }, [params]);
@@ -47,6 +49,12 @@ export default function PartnersPage({ params }: { params: Promise<{ token: stri
       });
       setDone(`התור נקבע ל${guestWhen(result.startsAt)}, עם 10% כבר על המחיר.`);
     } catch (err) {
+      if (slot) {
+        setTaken(slot);
+        setSlot("");
+        const slots = await api<{ days: Day[] }>(`/public/${token}/slots`).catch(() => null);
+        if (slots) setDays(slots.days);
+      }
       setError(err instanceof Error ? err.message : "השעה נתפסה");
       setBusy(false);
     }
@@ -74,39 +82,22 @@ export default function PartnersPage({ params }: { params: Promise<{ token: stri
       <GuestHero kicker={name ? `${firstOf(name)} הזמינה אותך` : "הזמנה"} title="10% על התור הראשון">
         <GuestNote>בוחרים שעה ללק ג&apos;ל. ההנחה כבר על המחיר. אחרי ההגעה, למי שהזמינה נשמר 10% לשלושה חודשים.</GuestNote>
       </GuestHero>
-      <a href={share} target="_blank" className="mt-6 block rounded-full bg-[#3F6B3A] py-3 text-center text-white">שליחת ההזמנה לחברה</a>
+      <a href={share} target="_blank" className="guest-quiet mt-6">שליחת ההזמנה לחברה</a>
       {done ? (
         <section className="guest-card guest-step mt-6 p-6 text-center">
           <h2 className="text-[32px] text-ink">נשמר</h2>
           <p className="mt-2 leading-7 text-muted">{done}</p>
         </section>
       ) : (
-        <form onSubmit={book} className="guest-card mt-6 space-y-4 p-6">
-          <p className="text-sm leading-6 text-muted">אם הקישור הגיע אלייך, מלאי שם וטלפון ובחרי שעה.</p>
-          <input name="name" required placeholder="שם" className="w-full rounded-2xl border border-lineStrong bg-white px-4 py-3" />
-          <input name="phone" required placeholder="טלפון" inputMode="tel" className="w-full rounded-2xl border border-lineStrong bg-white px-4 py-3" />
-          <div className="space-y-5">
-            {days.length === 0 ? <p className="text-sm text-muted">אין שעות פנויות בחלון הקרוב. אפשר להשאיר פרטים, ונועה תחזור עם שעה.</p> : days.map((day) => (
-              <div key={day.day}>
-                <p className="mb-2 text-sm text-faint">{guestDay(day.day)}</p>
-                <div className="flex flex-wrap gap-2">
-                  {day.slots.map((item) => (
-                    <button
-                      type="button"
-                      key={item}
-                      onClick={() => setSlot(slot === item ? "" : item)}
-                      className={`rounded-full px-3 py-1.5 ${slot === item ? "bg-brand text-onBrand" : "bg-sunken text-ink"}`}
-                    >
-                      {guestClock(item)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
+        <form onSubmit={book} className="mt-6 space-y-4">
+          <div className="guest-card space-y-4 p-6">
+            <p className="text-sm leading-6 text-muted">אם הקישור הגיע אלייך, מלאי שם וטלפון ובחרי שעה.</p>
+            <input name="name" required placeholder="שם" className="w-full rounded-2xl border border-lineStrong bg-white px-4 py-3" />
+            <input name="phone" required placeholder="טלפון" inputMode="tel" className="w-full rounded-2xl border border-lineStrong bg-white px-4 py-3" />
           </div>
-          {slot ? <p className="text-sm text-goldInk">השעה שנבחרה: {guestWhen(slot)}</p> : null}
+          <GuestDayPick days={days} selected={slot} onSelect={(value) => { setSlot(value); setTaken(""); setError(""); }} taken={taken} />
           {error ? <p className="text-sm text-[#9B2F45]">{error}</p> : null}
-          <button disabled={busy} className="w-full rounded-full bg-brand py-3 text-onBrand">{slot ? "קביעת התור" : "השארת פרטים בלי שעה"}</button>
+          <button disabled={busy} className="guest-confirm">{slot ? "קביעת התור" : "השארת פרטים בלי שעה"}</button>
         </form>
       )}
     </GuestScreen>
