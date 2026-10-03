@@ -1,8 +1,6 @@
 import { prisma } from "@noa/db";
-import { minutesFromClock, slotsForDay } from "@noa/shared";
+import { dayOffset, minutesFromClock, slotsForDay } from "@noa/shared";
 import { addDays, atJerusalem, dayKey, weekdaySunday0 } from "../../lib/time.js";
-
-const HORIZON_DAYS = 42;
 
 type Span = { startsAt: Date; endsAt: Date };
 
@@ -11,9 +9,10 @@ export async function openSlots(serviceCode: string) {
   if (!service) return [];
   const marked = await loadMarkedWeek();
   const today = dayKey(new Date());
-  const busy = await loadBusy(today);
+  const span = horizonDays(today);
+  const busy = await loadBusy(today, span);
   const days = [];
-  for (let offset = 0; offset < HORIZON_DAYS; offset += 1) {
+  for (let offset = 0; offset < span; offset += 1) {
     const day = addDays(today, offset);
     const slots = slotsOn(day, offset, marked, busy, service.durationMin, service.bufferMin);
     if (slots.length) days.push({ day, slots });
@@ -26,6 +25,13 @@ export async function slotIsOpen(serviceCode: string, startsAt: Date) {
   return days.some((day) => day.slots.some((slot) => new Date(slot).getTime() === startsAt.getTime()));
 }
 
+// Current month, the next one, and two months past that. The last day stays, so the far month is not cut in half.
+function horizonDays(today: string): number {
+  const [year = 0, month = 1] = today.split("-").map(Number);
+  const end = new Date(Date.UTC(year, month + 3, 0)).toISOString().slice(0, 10);
+  return dayOffset(end, today) + 1;
+}
+
 type StoredWeek = Partial<Record<string, { start?: string; end?: string } | null>>;
 
 async function loadMarkedWeek(): Promise<StoredWeek> {
@@ -33,9 +39,9 @@ async function loadMarkedWeek(): Promise<StoredWeek> {
   return (stored?.value ?? {}) as StoredWeek;
 }
 
-async function loadBusy(today: string): Promise<Span[]> {
+async function loadBusy(today: string, span: number): Promise<Span[]> {
   const start = atJerusalem(today, 0);
-  const end = atJerusalem(addDays(today, HORIZON_DAYS), 0);
+  const end = atJerusalem(addDays(today, span), 0);
   const where = { startsAt: { lt: end }, endsAt: { gt: start } };
   const [appointments, holds] = await Promise.all([
     prisma.appointment.findMany({ where: { ...where, status: { not: "בוטל" } }, select: { startsAt: true, endsAt: true } }),

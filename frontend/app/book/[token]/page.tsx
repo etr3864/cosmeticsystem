@@ -132,7 +132,7 @@ export default function BookPage({ params }: { params: Promise<{ token: string }
         <GuestHero kicker="נשמר" title="התור נקבע">
           <GuestNote>
             <p>{guestWhen(done.startsAt)}</p>
-            <p>10% כבר על המחיר.</p>
+            <p>10% הנחה כבר על המחיר.</p>
           </GuestNote>
         </GuestHero>
         <section className="guest-card guest-rise mt-8 p-6 text-center">

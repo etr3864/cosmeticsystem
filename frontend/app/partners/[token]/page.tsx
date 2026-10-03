@@ -29,7 +29,7 @@ export default function PartnersPage({ params }: { params: Promise<{ token: stri
     }).catch((err: Error) => setError(err.message));
   }, [params]);
 
-  const share = typeof window === "undefined" ? "" : `https://wa.me/?text=${encodeURIComponent(`${name} שמרה לך 10% על תור אצל נועה. נכנסים, בוחרים שעה, וההנחה כבר על המחיר: ${window.location.href}`)}`;
+  const share = typeof window === "undefined" ? "" : `https://wa.me/?text=${encodeURIComponent(`${name} שמרה לך 10% הנחה על תור אצל נועה. נכנסים, בוחרים שעה, וההנחה כבר על המחיר: ${window.location.href}`)}`;
 
   async function book(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,7 +47,7 @@ export default function PartnersPage({ params }: { params: Promise<{ token: stri
         method: "POST",
         body: JSON.stringify({ name: data.get("name"), phone: data.get("phone"), startsAt: slot }),
       });
-      setDone(`התור נקבע ל${guestWhen(result.startsAt)}, עם 10% כבר על המחיר.`);
+      setDone(`התור נקבע ל${guestWhen(result.startsAt)}, עם 10% הנחה כבר על המחיר.`);
     } catch (err) {
       if (slot) {
         setTaken(slot);
@@ -79,8 +79,8 @@ export default function PartnersPage({ params }: { params: Promise<{ token: stri
 
   return (
     <GuestScreen>
-      <GuestHero kicker={name ? `${firstOf(name)} הזמינה אותך` : "הזמנה"} title="10% על התור הראשון">
-        <GuestNote>בוחרים שעה ללק ג&apos;ל. ההנחה כבר על המחיר. אחרי ההגעה, למי שהזמינה נשמר 10% לשלושה חודשים.</GuestNote>
+      <GuestHero kicker={name ? `${firstOf(name)} הזמינה אותך` : "הזמנה"} title="10% הנחה על התור הראשון">
+        <GuestNote>בוחרים שעה ללק ג&apos;ל. ההנחה כבר על המחיר. אחרי ההגעה, למי שהזמינה נשמרת 10% הנחה לשלושה חודשים.</GuestNote>
       </GuestHero>
       <a href={share} target="_blank" className="guest-quiet mt-6">שליחת ההזמנה לחברה</a>
       {done ? (
