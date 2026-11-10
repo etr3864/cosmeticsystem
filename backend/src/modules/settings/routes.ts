@@ -7,6 +7,7 @@ import { jsonError } from "../../http/errors.js";
 import { decrypt, encrypt, randomToken, sha256 } from "../../lib/crypto.js";
 import { googleAccountEmail, mirrorAppointment, resetGoogleSync, testGoogle } from "../calendar/google.js";
 import { rememberAppointment } from "../appointments/service.js";
+import { resyncPendingReminders } from "../automations/reminder.js";
 
 export const settingsRoutes = new Hono();
 settingsRoutes.use("*", requireUser);
@@ -39,8 +40,9 @@ settingsRoutes.put("/hours", async (c) => {
 });
 
 settingsRoutes.put("/automations/:key", async (c) => {
-  const body = z.object({ messageTemplate: z.string().optional(), active: z.boolean().optional(), delayMinutes: z.number().optional() }).parse(await c.req.json());
+  const body = z.object({ messageTemplate: z.string().optional(), active: z.boolean().optional(), delayMinutes: z.number().int().min(-10080).max(10080).optional() }).parse(await c.req.json());
   await prisma.automation.update({ where: { key: c.req.param("key") }, data: body });
+  if (c.req.param("key") === "reminder" && body.delayMinutes !== undefined) await resyncPendingReminders();
   return c.json({ ok: true });
 });
 

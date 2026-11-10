@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@noa/db";
 import { calculatePrice, DISCOUNT_PERCENT } from "@noa/shared";
+import { syncReminder } from "../automations/reminder.js";
 import { enqueueAutomation, pushFacts, rememberFacts } from "../automations/service.js";
 import { clock, hebrewDate } from "../../lib/time.js";
 import { addTimeline, onAppointmentBooked, recomputeService, setSalesStatus } from "../pipelines/service.js";
@@ -21,13 +22,15 @@ function withCalendarLock<T>(work: (tx: Prisma.TransactionClient) => Promise<T>)
   });
 }
 
-export function placeAppointment(id: string, startsAt: Date, endsAt: Date, data: Prisma.AppointmentUpdateInput) {
-  return withCalendarLock(async (tx) => {
+export async function placeAppointment(id: string, startsAt: Date, endsAt: Date, data: Prisma.AppointmentUpdateInput) {
+  const placed = await withCalendarLock(async (tx) => {
     const clash = await tx.appointment.findFirst({ where: overlap(startsAt, endsAt, id) });
     const held = await tx.calendarHold.findFirst({ where: { startsAt: { lt: endsAt }, endsAt: { gt: startsAt } } });
     if (clash || held) throw new Error("taken");
     return tx.appointment.update({ where: { id }, data: { ...data, startsAt, endsAt } });
   });
+  await syncReminder(id);
+  return placed;
 }
 
 export async function createAppointment(input: {
@@ -89,6 +92,7 @@ export async function createAppointment(input: {
   }
   await onAppointmentBooked(input.contactId, input.bookedBy, input.actor ?? input.bookedBy);
   await rememberAppointment(appointment.id, "נקבע");
+  await syncReminder(appointment.id);
   return appointment;
 }
 
@@ -114,6 +118,7 @@ export async function cancelAppointment(id: string, actor: string) {
       where: { status: "pending", idempotencyKey: { in: [`noshow:${id}`, `discount:${id}`] } },
       data: { status: "cancelled" },
     });
+    await syncReminder(id);
     await recomputeService(appointment.contactId, appointment.serviceId);
     await addTimeline(appointment.contactId, "appointment", actor, { appointmentId: id, cancelled: true, startsAt: appointment.startsAt });
     await rememberAppointment(id, "בוטל");

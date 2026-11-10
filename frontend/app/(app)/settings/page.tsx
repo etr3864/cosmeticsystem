@@ -14,6 +14,7 @@ const templates: Record<string, { title: string; when: string }> = {
   no_answer_3: { title: "אין מענה 3", when: "כשמעבירים לאין מענה 3. אחר כך הסטטוס הופך ללא רלוונטית." },
   no_show: { title: "לא הגיעה", when: "כשמסמנים לא הגיעה, או שעתיים אחרי סוף התור אם עוד לא סומן." },
   partner_link: { title: "קישור שותפים", when: "שליחה ידנית מהכרטיס. אותו הסבר כמו לקבועה, בלי «מעכשיו את קבועה»." },
+  reminder: { title: "תזכורת לתור", when: "לפני כל תור שלא שירה קבעה. מחוץ לשעות השליחה היא יוצאת מוקדם יותר, אף פעם לא מאוחר." },
 };
 
 const tabs = [
@@ -29,7 +30,7 @@ type Tab = (typeof tabs)[number]["id"];
 
 type Settings = {
   settings: { markedWeek?: Record<string, { start: string; end: string } | null>; clinic?: { address: string; unit: string; parking: string }; googleCalendarId?: string };
-  automations: { key: string; messageTemplate: string; active: boolean }[];
+  automations: { key: string; messageTemplate: string; active: boolean; delayMinutes: number }[];
   services: { id: string; name: string; price: number; durationMin: number }[];
   campaigns: { id: string; name: string; spend: { month: string; amount: number }[] }[];
   technical?: boolean;
@@ -213,6 +214,28 @@ export default function SettingsPage() {
                             </div>
                             {open ? (
                               <div className="border-t border-line px-4 py-3">
+                                {item.key === "reminder" ? (
+                                  <label className="mb-3 flex items-center gap-2 text-sm">
+                                    כמה שעות לפני התור
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={72}
+                                      step={0.5}
+                                      defaultValue={Math.abs(item.delayMinutes) / 60}
+                                      onBlur={(event) => {
+                                        const hours = Number(event.target.value);
+                                        const delayMinutes = -Math.round(hours * 60);
+                                        if (!hours || hours < 1 || hours > 72 || delayMinutes === item.delayMinutes) return;
+                                        api(`/settings/automations/${item.key}`, { method: "PUT", body: JSON.stringify({ delayMinutes }) }).then(() => {
+                                          setData((current) => current && { ...current, automations: current.automations.map((row) => row.key === item.key ? { ...row, delayMinutes } : row) });
+                                          pushToast("נשמר");
+                                        }).catch((error: Error) => pushToast(error.message));
+                                      }}
+                                      className="w-24 rounded-md border border-lineStrong bg-white px-3 py-2 text-ink"
+                                    />
+                                  </label>
+                                ) : null}
                                 <textarea
                                   aria-label={meta.title}
                                   defaultValue={item.messageTemplate}

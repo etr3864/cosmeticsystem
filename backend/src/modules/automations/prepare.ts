@@ -2,9 +2,10 @@ import { prisma } from "@noa/db";
 import { DISCOUNT_PERCENT, MESSAGE_DEFAULTS, priceAfterPercent } from "@noa/shared";
 import { clock, hebrewDate } from "../../lib/time.js";
 import { ensureLink } from "../links/service.js";
+import { prepareReminder, type ReminderPayload } from "./reminder.js";
 import { pushFacts } from "./service.js";
 
-type Payload = { appointmentId?: string; serviceId?: string };
+type Payload = { appointmentId?: string; serviceId?: string } & ReminderPayload;
 
 type Prepared = {
   skip?: boolean;
@@ -18,6 +19,7 @@ export async function prepareJob(key: string, contactId: string, payload: Payloa
   if (key === "beshvilech") return prepareQuestionnaire(contactId, payload, template);
   if (key === "discount") return prepareDiscount(contactId, payload, template);
   if (key === "no_show") return prepareNoShow(payload, template);
+  if (key === "reminder") return prepareReminder(contactId, payload, template);
   if (key === "became_regular" || key === "partner_link") return preparePartner(key, contactId, template);
   if (key === "no_answer_3") return { vars: {}, facts: pushFacts("שלוש שיחות בלי מענה. זו ההודעה האחרונה, והיא מזמינה את הלקוחה לכתוב כשמתאים לה."), template };
   return { vars: {}, facts: pushFacts("נשלחה הודעה ללקוחה מהמערכת."), template };

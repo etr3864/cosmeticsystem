@@ -57,6 +57,7 @@ async function main() {
     { key: "no_answer_3", triggerEvent: "contact.status_changed", delayMinutes: 0, messageTemplate: MESSAGE_DEFAULTS.noAnswer3, oncePerContact: false },
     { key: "became_regular", triggerEvent: "contact.status_changed", delayMinutes: 0, messageTemplate: MESSAGE_DEFAULTS.becameRegular, oncePerContact: true },
     { key: "partner_link", triggerEvent: "manual.send", delayMinutes: 0, messageTemplate: MESSAGE_DEFAULTS.partnerLink, oncePerContact: false },
+    { key: "reminder", triggerEvent: "appointment.booked", delayMinutes: -180, messageTemplate: MESSAGE_DEFAULTS.reminder, oncePerContact: false },
   ];
   for (const item of automations) {
     await prisma.automation.upsert({ where: { key: item.key }, update: {}, create: item });

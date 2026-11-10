@@ -1,5 +1,5 @@
 import { prisma } from "@noa/db";
-import { nextSendAt } from "../../lib/send-window.js";
+import { loadSendWindow, nextSendAt } from "../../lib/send-window.js";
 import { markAttendance } from "../appointments/service.js";
 import { markLinkSent } from "../links/service.js";
 import { setSalesStatus } from "../pipelines/service.js";
@@ -53,7 +53,7 @@ async function runJob(job: {
       await prisma.scheduledJob.update({ where: { id: job.id }, data: { status: "cancelled" } });
       return;
     }
-    const open = nextSendAt(new Date());
+    const open = nextSendAt(new Date(), await loadSendWindow());
     if (open.getTime() > Date.now() + 15_000) {
       await prisma.scheduledJob.update({ where: { id: job.id }, data: { status: "pending", runAt: open } });
       return;
