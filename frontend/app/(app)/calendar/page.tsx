@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -291,20 +290,15 @@ export default function CalendarPage() {
   );
 }
 
+// The button stays inside FullCalendar's own cell content: a portal into a cell FullCalendar
+// owns can outlive that cell, and React then fails to remove it when the calendar unmounts.
+// The day number is position: static, so the absolute button still anchors to the day frame.
 function DayLabel({ arg, onPlus }: { arg: DayCellContentArg; onPlus: () => void }) {
-  const anchor = useRef<HTMLSpanElement>(null);
-  const [frame, setFrame] = useState<Element | null>(null);
-  useEffect(() => {
-    setFrame(anchor.current?.closest(".fc-daygrid-day-frame") ?? null);
-  }, [arg.date]);
   if (arg.view.type !== "dayGridMonth") return <span>{arg.dayNumberText}</span>;
-  const plus = (
-    <button type="button" className="day-plus" aria-label="תור ביום הזה" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); event.preventDefault(); onPlus(); }}>+</button>
-  );
   return (
     <>
-      <span ref={anchor}>{arg.dayNumberText}</span>
-      {frame ? createPortal(plus, frame) : null}
+      <span>{arg.dayNumberText}</span>
+      <button type="button" className="day-plus" aria-label="תור ביום הזה" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); event.preventDefault(); onPlus(); }}>+</button>
     </>
   );
 }
